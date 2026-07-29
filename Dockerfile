@@ -15,6 +15,6 @@ FROM gcr.io/distroless/static-debian12:nonroot
 WORKDIR /app
 COPY --from=builder /out/api /app/api
 
-EXPOSE 8080
+EXPOSE 19560
 USER nonroot:nonroot
 ENTRYPOINT ["/app/api"]

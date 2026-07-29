@@ -34,7 +34,7 @@ func MustLoad() Config {
 
 	cfg := Config{
 		AppEnv:                   getEnv("APP_ENV", "development"),
-		HTTPPort:                 getEnv("HTTP_PORT", "8080"),
+		HTTPPort:                 getEnv("HTTP_PORT", "19560"),
 		ReadTimeoutSeconds:       getEnvAsInt("READ_TIMEOUT_SECONDS", 10),
 		WriteTimeoutSeconds:      getEnvAsInt("WRITE_TIMEOUT_SECONDS", 10),
 		ReadHeaderTimeoutSeconds: getEnvAsInt("READ_HEADER_TIMEOUT_SECONDS", 5),

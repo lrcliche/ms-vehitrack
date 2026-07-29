@@ -1,0 +1,18 @@
+services:
+  ms-vehitrack:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ms-vehitrack:local
+    container_name: ms-vehitrack
+    ports:
+      - "19560:19560"
+    env_file:
+      - .env
+    environment:
+      APP_ENV: development
+      HTTP_PORT: "19560"
+      GOOGLE_APPLICATION_CREDENTIALS: /secrets/service-account.json
+    volumes:
+      - ./configs/gcp/service-account.json:/secrets/service-account.json:ro
+    restart: unless-stopped

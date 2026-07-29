@@ -1,0 +1,280 @@
+name: Deploy ms-vehitrack (Go)
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-ms-vehitrack-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: VPS
+
+    env:
+      SSH_HOST: ${{ secrets.VPS_HOST }}
+      SSH_USER: ${{ secrets.VPS_USER }}
+      SSH_PORT: ${{ secrets.VPS_PORT }}
+      SERVICE_NAME: ms-vehitrack
+      RELEASE_ROOT: /srv/ms-vehitrack
+      RELEASE_DIR: /srv/ms-vehitrack/releases/${{ github.run_number }}_${{ github.sha }}
+      REMOTE_TMP: /tmp/ms-vehitrack-${{ github.run_id }}
+      ENV_FILE: /etc/factra/env/ms-vehitrack.env
+      GLOBAL_ENV_FILE: /etc/factra/env/global.env
+      HEALTH_PATH: ${{ vars.MS_VEHITRACK_HEALTH_PATH || '/health' }}
+      PROD_PORT: ${{ vars.MS_VEHITRACK_PORT }}
+      VERIFY_PORT: ${{ vars.VERIFY_MS_VEHITRACK_PORT || '' }}
+      PUBLIC_HEALTH_URL: ${{ vars.MS_VEHITRACK_PUBLIC_HEALTH_URL || '' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build binary
+        run: |
+          set -euo pipefail
+          mkdir -p build rel
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o "build/ms-vehitrack" ./cmd/api
+          test -s "build/ms-vehitrack"
+          chmod +x "build/ms-vehitrack"
+          cp "build/ms-vehitrack" "rel/ms-vehitrack"
+          cp -R scripts rel/scripts
+          tar -czf release.tar.gz -C rel .
+          test -s release.tar.gz
+
+      - name: Prepare remote tmp
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ env.SSH_PORT }}
+          envs: REMOTE_TMP
+          script: |
+            set -euo pipefail
+            mkdir -p "$REMOTE_TMP"
+            rm -f "$REMOTE_TMP/release.tar.gz"
+
+      - name: Upload release
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ env.SSH_PORT }}
+          source: release.tar.gz
+          target: ${{ env.REMOTE_TMP }}/
+
+      - name: Deploy release
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ env.SSH_PORT }}
+          envs: SSH_USER,SERVICE_NAME,RELEASE_ROOT,RELEASE_DIR,REMOTE_TMP,ENV_FILE,GLOBAL_ENV_FILE,PROD_PORT,VERIFY_PORT,HEALTH_PATH
+          script: |
+            set -euo pipefail
+
+            if [ -z "$PROD_PORT" ]; then
+              echo "Missing GitHub variable MS_VEHITRACK_PORT."
+              exit 1
+            fi
+
+            if [ ! -f "$GLOBAL_ENV_FILE" ]; then
+              echo "Missing global env file: $GLOBAL_ENV_FILE"
+              echo "Create it manually on the VPS. Deploy must not modify global.env."
+              exit 1
+            fi
+
+            if [ ! -f "$ENV_FILE" ]; then
+              echo "Missing VPS env file: $ENV_FILE"
+              echo "Create it manually before deploying."
+              exit 1
+            fi
+            if [ ! -r "$ENV_FILE" ]; then
+              echo "Service env file must be readable by the deploy user for safe preflight: $ENV_FILE"
+              echo "Grant read permission with ACL or group ownership before deploying."
+              exit 1
+            fi
+            candidate_env="$(mktemp)"
+            cp "$ENV_FILE" "$candidate_env"
+            chmod 0600 "$candidate_env"
+            cleanup() {
+              rm -f "${candidate_env:-}" "${test_env:-}" "${runtime_env:-}" "${preflight_log:-}"
+            }
+            trap cleanup EXIT
+
+            apply_port() {
+              env_path="$1"
+              port="$2"
+              if grep -q '^HTTP_PORT=' "$env_path"; then
+                sed -i "s/^HTTP_PORT=.*/HTTP_PORT=${port}/" "$env_path"
+              else
+                printf '\nHTTP_PORT=%s\n' "$port" >> "$env_path"
+              fi
+            }
+
+            sanitize_env() {
+              src="$1"
+              dest="$2"
+              sed '1s/^\xEF\xBB\xBF//' "$src" | tr -d '\r' | awk '
+                /^[[:space:]]*($|#)/ { next }
+                /^[A-Za-z_][A-Za-z0-9_]*=/ { print; next }
+                { print "Skipping invalid env line: " NR > "/dev/stderr" }
+              ' >> "$dest"
+            }
+
+            strip_global_managed_env() {
+              env_path="$1"
+              tmp_path="$(mktemp)"
+              awk -F= '
+                $1 == "APP_DATABASE_URL" { next }
+                $1 == "DATABASE_URL" { next }
+                { print }
+              ' "$env_path" > "$tmp_path"
+              mv "$tmp_path" "$env_path"
+            }
+
+            normalized_env="$(mktemp)"
+            sanitize_env "$candidate_env" "$normalized_env"
+            mv "$normalized_env" "$candidate_env"
+            strip_global_managed_env "$candidate_env"
+            apply_port "$candidate_env" "$PROD_PORT"
+            previous_current="$(readlink -f "$RELEASE_ROOT/current" 2>/dev/null || true)"
+
+            mkdir -p "$RELEASE_ROOT/releases"
+            rm -rf "$RELEASE_DIR"
+            mkdir -p "$RELEASE_DIR"
+            mv "$REMOTE_TMP/release.tar.gz" "$RELEASE_DIR/release.tar.gz"
+            tar -xzf "$RELEASE_DIR/release.tar.gz" -C "$RELEASE_DIR"
+            rm -f "$RELEASE_DIR/release.tar.gz"
+            chmod +x "$RELEASE_DIR/ms-vehitrack"
+
+            test_port="${VERIFY_PORT:-}"
+            if [ -z "$test_port" ]; then
+              test_port="$((PROD_PORT + 10000))"
+            fi
+            test_env="$(mktemp)"
+            cp "$candidate_env" "$test_env"
+            apply_port "$test_env" "$test_port"
+            preflight_log="$(mktemp)"
+
+            echo "Preflight starting $SERVICE_NAME on temporary port $test_port before touching production current."
+            if [ ! -r "$GLOBAL_ENV_FILE" ]; then
+              echo "Global env file must be readable by the deploy user for safe preflight: $GLOBAL_ENV_FILE"
+              echo "Grant read permission with ACL or group ownership before deploying."
+              exit 1
+            fi
+
+            runtime_env="$(mktemp)"
+
+            sanitize_env "$GLOBAL_ENV_FILE" "$runtime_env"
+
+            sanitize_env "$test_env" "$runtime_env"
+            chmod 0600 "$runtime_env"
+            (
+              cd "$RELEASE_DIR"
+              set -a
+              . "$runtime_env"
+              set +a
+              exec "$RELEASE_DIR/ms-vehitrack"
+            ) >"$preflight_log" 2>&1 &
+            preflight_pid="$!"
+
+            preflight_ok=false
+            for i in $(seq 1 30); do
+              if ! kill -0 "$preflight_pid" >/dev/null 2>&1; then
+                echo "Preflight process exited before healthcheck passed."
+                cat "$preflight_log" || true
+                exit 1
+              fi
+              if curl -fsS "http://127.0.0.1:$test_port$HEALTH_PATH" >/dev/null 2>&1; then
+                preflight_ok=true
+                break
+              fi
+              sleep 1
+            done
+            kill "$preflight_pid" >/dev/null 2>&1 || true
+            wait "$preflight_pid" >/dev/null 2>&1 || true
+
+            if [ "$preflight_ok" != true ]; then
+              echo "Preflight healthcheck failed: http://127.0.0.1:$test_port$HEALTH_PATH"
+              cat "$preflight_log" || true
+              exit 1
+            fi
+            echo "Preflight OK. Activating release."
+
+            rollback() {
+              echo "Deployment failed. Rolling back $SERVICE_NAME."
+              if [ -n "${previous_current:-}" ] && [ -d "$previous_current" ]; then
+                ln -sfn "$previous_current" "$RELEASE_ROOT/current"
+                sudo systemctl restart "$SERVICE_NAME" || true
+              fi
+              sudo systemctl status "$SERVICE_NAME" --no-pager || true
+            }
+
+            dump_service_diagnostics() {
+              echo "Recent $SERVICE_NAME journal entries:"
+              sudo journalctl -u "$SERVICE_NAME" -n 120 --no-pager || true
+              echo "Recent $SERVICE_NAME stdout log:"
+              sudo tail -n 120 "/var/log/factra/${SERVICE_NAME}.log" || true
+              echo "Recent $SERVICE_NAME stderr log:"
+              sudo tail -n 120 "/var/log/factra/${SERVICE_NAME}.error.log" || true
+            }
+
+            # El archivo $ENV_FILE se gestiona manualmente en el VPS. El deploy solo lo
+            # lee para el preflight y nunca lo sobreescribe. El puerto de produccion debe
+            # estar fijado directamente en $ENV_FILE por el administrador del VPS.
+            ln -sfn "$RELEASE_DIR" "$RELEASE_ROOT/current"
+            echo "Release activated at $RELEASE_ROOT/current. Restarting $SERVICE_NAME."
+            sudo systemctl restart "$SERVICE_NAME"
+
+            production_ok=false
+            for i in $(seq 1 30); do
+              if curl -fsS "http://127.0.0.1:$PROD_PORT$HEALTH_PATH" >/dev/null 2>&1; then
+                production_ok=true
+                break
+              fi
+              sleep 1
+            done
+
+            if [ "$production_ok" != true ]; then
+              echo "Production healthcheck failed: http://127.0.0.1:$PROD_PORT$HEALTH_PATH"
+              dump_service_diagnostics
+              rollback
+              exit 1
+            fi
+            echo "Production healthcheck OK."
+
+      - name: Public smoke test
+        if: env.PUBLIC_HEALTH_URL != ''
+        run: |
+          set -euo pipefail
+          curl -fsS "$PUBLIC_HEALTH_URL" >/dev/null
+
+      - name: Cleanup old releases
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ env.SSH_PORT }}
+          envs: RELEASE_ROOT
+          script: |
+            set -euo pipefail
+            cd "$RELEASE_ROOT/releases"
+            ls -1dt -- */ 2>/dev/null | tail -n +6 | xargs -r rm -rf

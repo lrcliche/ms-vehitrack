@@ -1,0 +1,28 @@
+# Binaries / local artifacts
+*.exe
+*.exe~
+*.test
+*.out
+bin/
+tmp/
+tools/
+
+# Secrets and local env
+.env
+.env.*
+!.env.example
+configs/gcp/*.json
+**/*service-account*.json
+**/*credentials*.json
+
+# Git / IDE
+.git/
+.github/
+.cursor/
+.vscode/
+.idea/
+
+# Docs and non-runtime
+docs/
+*.md
+!.dockerignore

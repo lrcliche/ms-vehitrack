@@ -5,7 +5,7 @@ Contrato de consumo para clientes (Flutter / web / app móvil) del microservicio
 Base URL local por defecto:
 
 ```text
-http://localhost:8080
+http://localhost:19560
 ```
 
 ---
@@ -82,7 +82,7 @@ Frecuencia esperada del dispositivo: **~1 evento por segundo**.
 
 ```http
 POST /api/v1/telemetry HTTP/1.1
-Host: localhost:8080
+Host: localhost:19560
 Content-Type: application/json
 X-API-Key: <API_KEY>
 ```
@@ -247,7 +247,7 @@ Si cambias el `timestamp` en cada reintento, se crea un evento nuevo.
 ### Ejemplo `curl`
 
 ```bash
-curl -sS -X POST "http://localhost:8080/api/v1/telemetry" \
+curl -sS -X POST "http://localhost:19560/api/v1/telemetry" \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $API_KEY" \
   -d '{
