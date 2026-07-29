@@ -10,9 +10,9 @@ import (
 	"syscall"
 	"time"
 
-	"template-go-hexagonal/application/config"
-	"template-go-hexagonal/presentation/container"
-	"template-go-hexagonal/presentation/routes"
+	"ms-vehitrack/application/config"
+	"ms-vehitrack/presentation/container"
+	"ms-vehitrack/presentation/routes"
 )
 
 const shutdownTimeout = 10 * time.Second

@@ -1,4 +1,4 @@
-# Example: Applied patterns in this template
+# Example: Applied patterns in ms-vehitrack
 
 ## 1. Hexagonal Architecture
 

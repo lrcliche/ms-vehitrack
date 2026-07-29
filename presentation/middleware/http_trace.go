@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"template-go-hexagonal/presentation/logging"
+	"ms-vehitrack/presentation/logging"
 )
 
 func HTTPTrace() gin.HandlerFunc {

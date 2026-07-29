@@ -3,9 +3,9 @@ package routes
 import (
 	"net/http"
 
-	"template-go-hexagonal/presentation/container"
-	"template-go-hexagonal/presentation/middleware"
-	"template-go-hexagonal/presentation/responses"
+	"ms-vehitrack/presentation/container"
+	"ms-vehitrack/presentation/middleware"
+	"ms-vehitrack/presentation/responses"
 
 	"github.com/gin-gonic/gin"
 )

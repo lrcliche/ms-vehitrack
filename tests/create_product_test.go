@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"template-go-hexagonal/application/services"
-	"template-go-hexagonal/domain/entities"
+	"ms-vehitrack/application/services"
+	"ms-vehitrack/domain/entities"
 
 	"github.com/stretchr/testify/require"
 )

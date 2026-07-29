@@ -1,4 +1,4 @@
-APP_NAME := template-go-hexagonal
+APP_NAME := ms-vehitrack
 MAIN_PACKAGE := ./cmd/api
 BUILD_DIR := ./bin
 BINARY := $(BUILD_DIR)/api

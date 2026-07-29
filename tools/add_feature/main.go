@@ -316,7 +316,7 @@ func portTemplate(names featureNames) string {
 import (
 	"context"
 
-	"template-go-hexagonal/domain/entities"
+	"ms-vehitrack/domain/entities"
 )
 
 type %sRepository interface {
@@ -332,8 +332,8 @@ import (
 	"context"
 	"log"
 
-	"template-go-hexagonal/domain/entities"
-	"template-go-hexagonal/domain/ports"
+	"ms-vehitrack/domain/entities"
+	"ms-vehitrack/domain/ports"
 )
 
 type %[1]sService interface {
@@ -367,7 +367,7 @@ import (
 	"context"
 	"sync"
 
-	"template-go-hexagonal/domain/entities"
+	"ms-vehitrack/domain/entities"
 )
 
 type InMemory%sRepository struct {
@@ -396,10 +396,10 @@ func handlerTemplate(names featureNames) string {
 import (
 	"net/http"
 
-	"template-go-hexagonal/application/services"
-	presentationerrors "template-go-hexagonal/presentation/errors"
-	"template-go-hexagonal/presentation/logging"
-	"template-go-hexagonal/presentation/responses"
+	"ms-vehitrack/application/services"
+	presentationerrors "ms-vehitrack/presentation/errors"
+	"ms-vehitrack/presentation/logging"
+	"ms-vehitrack/presentation/responses"
 
 	"github.com/gin-gonic/gin"
 )
@@ -437,7 +437,7 @@ func routesTemplate(names featureNames) string {
 	return fmt.Sprintf(`package routes
 
 import (
-	"template-go-hexagonal/presentation/handlers"
+	"ms-vehitrack/presentation/handlers"
 
 	"github.com/gin-gonic/gin"
 )

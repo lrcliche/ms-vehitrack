@@ -4,8 +4,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	presentationerrors "template-go-hexagonal/presentation/errors"
-	"template-go-hexagonal/presentation/responses"
+	presentationerrors "ms-vehitrack/presentation/errors"
+	"ms-vehitrack/presentation/responses"
 )
 
 func Recovery() gin.HandlerFunc {

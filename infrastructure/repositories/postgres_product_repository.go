@@ -5,9 +5,9 @@ import (
 	"errors"
 	"log"
 
-	"template-go-hexagonal/domain/entities"
-	"template-go-hexagonal/domain/ports"
-	domainports "template-go-hexagonal/domain/ports"
+	"ms-vehitrack/domain/entities"
+	"ms-vehitrack/domain/ports"
+	domainports "ms-vehitrack/domain/ports"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"

@@ -3,7 +3,7 @@ package ports
 import (
 	"context"
 
-	"template-go-hexagonal/domain/entities"
+	"ms-vehitrack/domain/entities"
 )
 
 type ProductRepository interface {

@@ -26,7 +26,7 @@ func MustLoad() Config {
 		HTTPPort:            getEnv("HTTP_PORT", "8080"),
 		ReadTimeoutSeconds:  getEnvAsInt("READ_TIMEOUT_SECONDS", 10),
 		WriteTimeoutSeconds: getEnvAsInt("WRITE_TIMEOUT_SECONDS", 10),
-		PostgresDSN:         getEnv("POSTGRES_DSN", "postgres://postgres:postgres@localhost:5432/template_hexagonal?sslmode=disable"),
+		PostgresDSN:         getEnv("POSTGRES_DSN", "postgres://postgres:postgres@localhost:5432/vehitrack?sslmode=disable"),
 	}
 
 	if cfg.PostgresDSN == "" {

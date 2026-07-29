@@ -4,8 +4,8 @@ import (
 	"errors"
 	"net/http"
 
-	"template-go-hexagonal/domain/entities"
-	"template-go-hexagonal/domain/ports"
+	"ms-vehitrack/domain/entities"
+	"ms-vehitrack/domain/ports"
 )
 
 func Map(err error) AppError {

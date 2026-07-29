@@ -1,7 +1,7 @@
 # Main Entrypoint Placement Audit
 
 ## Scope
-This audit evaluates whether the application entrypoint should live at repository root (`main.go`) or under `cmd/api/main.go` for this hexagonal backend template.
+This audit evaluates whether the application entrypoint should live at repository root (`main.go`) or under `cmd/api/main.go` for this hexagonal backend service.
 
 ## Option A: `main.go` at repository root
 
@@ -33,7 +33,7 @@ This audit evaluates whether the application entrypoint should live at repositor
 ## Final Decision
 **Use `cmd/api/main.go` (Option B).**
 
-This repository is positioned as a professional reusable backend template, not a throwaway single-binary toy app. The `cmd/api` structure provides better long-term maintainability, extensibility, and a cleaner commercial presentation while keeping architecture responsibilities explicit.
+This repository is positioned as a production-oriented microservice (`ms-vehitrack`), not a throwaway single-binary toy app. The `cmd/api` structure provides better long-term maintainability, extensibility, and a cleaner commercial presentation while keeping architecture responsibilities explicit.
 
 ## Operational Note
 No file move is required because the project already uses the recommended structure.

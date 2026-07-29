@@ -1,4 +1,4 @@
-module template-go-hexagonal
+module ms-vehitrack
 
 go 1.23
 

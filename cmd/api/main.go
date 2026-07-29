@@ -5,8 +5,8 @@ import (
 	"log"
 	"os"
 
-	"template-go-hexagonal/application/config"
-	"template-go-hexagonal/presentation/server"
+	"ms-vehitrack/application/config"
+	"ms-vehitrack/presentation/server"
 )
 
 func main() {

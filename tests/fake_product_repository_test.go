@@ -4,8 +4,8 @@ import (
 	"context"
 	"strconv"
 
-	"template-go-hexagonal/domain/entities"
-	"template-go-hexagonal/domain/ports"
+	"ms-vehitrack/domain/entities"
+	"ms-vehitrack/domain/ports"
 )
 
 type fakeProductRepository struct {

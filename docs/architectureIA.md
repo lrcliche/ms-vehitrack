@@ -1,8 +1,8 @@
-# Architecture IA Guide (Go Hexagonal Template)
+# Architecture IA Guide (ms-vehitrack)
 
 ## 1) Purpose of this document
 
-This document defines the architectural rules that **developers and AI coding agents** must follow when changing this template.
+This document defines the architectural rules that **developers and AI coding agents** must follow when changing this project.
 
 Goals:
 - Keep a strict **Hexagonal / Clean Architecture** boundary.
@@ -167,7 +167,7 @@ Do not place business logic, SQL, or endpoint logic in `main`.
 
 ## 9) AI coding rules
 
-When AI agents (Codex, Cursor, Copilot, ChatGPT, etc.) modify this template, they must:
+When AI agents (Codex, Cursor, Copilot, ChatGPT, etc.) modify this project, they must:
 
 1. Not break hexagonal boundaries.
 2. Never import infrastructure/presentation packages from domain.

@@ -5,8 +5,8 @@ import (
 	"log"
 	"time"
 
-	"template-go-hexagonal/domain/entities"
-	"template-go-hexagonal/domain/ports"
+	"ms-vehitrack/domain/entities"
+	"ms-vehitrack/domain/ports"
 )
 
 type CreateProductInput struct {

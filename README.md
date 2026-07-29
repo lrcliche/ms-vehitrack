@@ -1,10 +1,10 @@
-# template_go_hexagonal_v1
+# ms-vehitrack
 
-Professional Go backend starter kit using hexagonal architecture, prepared for fast local onboarding and production-friendly evolution.
+Microservicio Go para tracking de vehículos, con arquitectura hexagonal y API REST.
 
 ## Purpose
 
-This template provides a clean foundation for REST APIs in Go with strict boundaries between domain, application, infrastructure, and presentation layers.
+`ms-vehitrack` separa dominio, aplicación, infraestructura y presentación con límites estrictos, listo para desarrollo local y evolución a producción.
 
 ## Architecture Summary
 

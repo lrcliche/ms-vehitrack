@@ -2,7 +2,7 @@ package responses
 
 import (
 	"github.com/gin-gonic/gin"
-	presentationerrors "template-go-hexagonal/presentation/errors"
+	presentationerrors "ms-vehitrack/presentation/errors"
 )
 
 type Response struct {

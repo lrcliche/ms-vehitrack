@@ -1,4 +1,4 @@
-# Add Feature IA Guide (Go Hexagonal Template)
+# Add Feature IA Guide (ms-vehitrack)
 
 ## 1) Purpose
 

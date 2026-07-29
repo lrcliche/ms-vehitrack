@@ -3,12 +3,12 @@ package container
 import (
 	"context"
 
-	"template-go-hexagonal/application/config"
-	"template-go-hexagonal/application/services"
-	"template-go-hexagonal/domain/ports"
-	"template-go-hexagonal/infrastructure/database"
-	"template-go-hexagonal/infrastructure/repositories"
-	"template-go-hexagonal/presentation/handlers"
+	"ms-vehitrack/application/config"
+	"ms-vehitrack/application/services"
+	"ms-vehitrack/domain/ports"
+	"ms-vehitrack/infrastructure/database"
+	"ms-vehitrack/infrastructure/repositories"
+	"ms-vehitrack/presentation/handlers"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )

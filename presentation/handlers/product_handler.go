@@ -3,10 +3,10 @@ package handlers
 import (
 	"net/http"
 
-	"template-go-hexagonal/application/services"
-	presentationerrors "template-go-hexagonal/presentation/errors"
-	"template-go-hexagonal/presentation/logging"
-	"template-go-hexagonal/presentation/responses"
+	"ms-vehitrack/application/services"
+	presentationerrors "ms-vehitrack/presentation/errors"
+	"ms-vehitrack/presentation/logging"
+	"ms-vehitrack/presentation/responses"
 
 	"github.com/gin-gonic/gin"
 )
