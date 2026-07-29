@@ -5,28 +5,28 @@ import (
 	"net/http"
 	"time"
 
-	"ms-vehitrack/application/usecases"
-	presentationerrors "ms-vehitrack/presentation/errors"
+	"ms-vehitrack/application/services"
 	"ms-vehitrack/presentation/dto"
+	presentationerrors "ms-vehitrack/presentation/errors"
 	"ms-vehitrack/presentation/logging"
 	"ms-vehitrack/presentation/responses"
 
 	"github.com/gin-gonic/gin"
 )
 
-// TelemetryUseCaseResolver resolves the publish telemetry use case.
-type TelemetryUseCaseResolver interface {
-	ResolvePublishTelemetryUseCase() usecases.PublishTelemetryUseCase
+// TelemetryServiceResolver resolves the telemetry application service.
+type TelemetryServiceResolver interface {
+	ResolveTelemetryService() services.TelemetryService
 }
 
 // TelemetryHandler exposes HTTP endpoints for telemetry ingestion.
 type TelemetryHandler struct {
-	useCaseResolver TelemetryUseCaseResolver
+	serviceResolver TelemetryServiceResolver
 }
 
 // NewTelemetryHandler creates a TelemetryHandler.
-func NewTelemetryHandler(useCaseResolver TelemetryUseCaseResolver) *TelemetryHandler {
-	return &TelemetryHandler{useCaseResolver: useCaseResolver}
+func NewTelemetryHandler(serviceResolver TelemetryServiceResolver) *TelemetryHandler {
+	return &TelemetryHandler{serviceResolver: serviceResolver}
 }
 
 // Publish handles POST /api/v1/telemetry.
@@ -42,7 +42,7 @@ func (h *TelemetryHandler) Publish(c *gin.Context) {
 	}
 
 	telemetry := request.ToDomain()
-	if err := h.useCaseResolver.ResolvePublishTelemetryUseCase().Execute(c.Request.Context(), telemetry); err != nil {
+	if err := h.serviceResolver.ResolveTelemetryService().Publish(c.Request.Context(), telemetry); err != nil {
 		h.handleError(c, err)
 		return
 	}

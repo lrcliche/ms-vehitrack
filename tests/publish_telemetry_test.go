@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"ms-vehitrack/application/services"
 	"ms-vehitrack/application/usecases"
 	"ms-vehitrack/domain/entities"
 	"ms-vehitrack/domain/ports"
@@ -23,36 +24,40 @@ func (f *fakeTelemetryPublisher) Publish(_ context.Context, telemetry entities.T
 	return f.err
 }
 
-func TestPublishTelemetryUseCase_Success(t *testing.T) {
+func newTelemetryService(publisher ports.TelemetryPublisherPort) services.TelemetryService {
+	return services.NewTelemetryService(usecases.NewPublishTelemetryUseCase(publisher))
+}
+
+func TestTelemetryService_PublishSuccess(t *testing.T) {
 	publisher := &fakeTelemetryPublisher{}
-	useCase := usecases.NewPublishTelemetryUseCase(publisher)
+	service := newTelemetryService(publisher)
 
 	telemetry := validTelemetry()
-	err := useCase.Execute(context.Background(), telemetry)
+	err := service.Publish(context.Background(), telemetry)
 
 	require.NoError(t, err)
 	require.Len(t, publisher.received, 1)
 	require.Equal(t, telemetry.DeviceID, publisher.received[0].DeviceID)
 }
 
-func TestPublishTelemetryUseCase_ValidationError(t *testing.T) {
+func TestTelemetryService_ValidationError(t *testing.T) {
 	publisher := &fakeTelemetryPublisher{}
-	useCase := usecases.NewPublishTelemetryUseCase(publisher)
+	service := newTelemetryService(publisher)
 
 	telemetry := validTelemetry()
 	telemetry.DeviceID = ""
 
-	err := useCase.Execute(context.Background(), telemetry)
+	err := service.Publish(context.Background(), telemetry)
 
 	require.ErrorIs(t, err, entities.ErrInvalidTelemetryDeviceID)
 	require.Empty(t, publisher.received)
 }
 
-func TestPublishTelemetryUseCase_PublishError(t *testing.T) {
+func TestTelemetryService_PublishError(t *testing.T) {
 	publisher := &fakeTelemetryPublisher{err: ports.ErrTelemetryPublishFailed}
-	useCase := usecases.NewPublishTelemetryUseCase(publisher)
+	service := newTelemetryService(publisher)
 
-	err := useCase.Execute(context.Background(), validTelemetry())
+	err := service.Publish(context.Background(), validTelemetry())
 
 	require.Error(t, err)
 	require.True(t, errors.Is(err, ports.ErrTelemetryPublishFailed))

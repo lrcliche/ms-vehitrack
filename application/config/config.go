@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -13,6 +14,7 @@ type Config struct {
 	HTTPPort            string
 	ReadTimeoutSeconds  int
 	WriteTimeoutSeconds int
+	PostgresEnabled     bool
 	PostgresDSN         string
 }
 
@@ -27,11 +29,12 @@ func MustLoad() Config {
 		HTTPPort:            getEnv("HTTP_PORT", "8080"),
 		ReadTimeoutSeconds:  getEnvAsInt("READ_TIMEOUT_SECONDS", 10),
 		WriteTimeoutSeconds: getEnvAsInt("WRITE_TIMEOUT_SECONDS", 10),
-		PostgresDSN:         getEnv("POSTGRES_DSN", "postgres://postgres:postgres@localhost:5432/vehitrack?sslmode=disable"),
+		PostgresEnabled:     getEnvAsBool("POSTGRES_ENABLED", false),
+		PostgresDSN:         os.Getenv("POSTGRES_DSN"),
 	}
 
-	if cfg.PostgresDSN == "" {
-		log.Fatal("POSTGRES_DSN is required")
+	if cfg.PostgresEnabled && cfg.PostgresDSN == "" {
+		log.Fatal("POSTGRES_DSN is required when POSTGRES_ENABLED=true")
 	}
 
 	return cfg
@@ -51,6 +54,20 @@ func getEnvAsInt(key string, fallback int) int {
 	}
 
 	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return fallback
+	}
+
+	return parsed
+}
+
+func getEnvAsBool(key string, fallback bool) bool {
+	value := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
+	if value == "" {
+		return fallback
+	}
+
+	parsed, err := strconv.ParseBool(value)
 	if err != nil {
 		return fallback
 	}
