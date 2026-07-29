@@ -9,7 +9,8 @@
 *.dylib
 tmp/*
 bin/*
-
+tools
+configs/gcp/*.json
 
 # Test binary, built with `go test -c`
 *.test

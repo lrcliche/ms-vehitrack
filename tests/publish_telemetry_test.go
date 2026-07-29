@@ -1,0 +1,83 @@
+package tests
+
+import (
+	"context"
+	"errors"
+	"testing"
+	"time"
+
+	"ms-vehitrack/application/usecases"
+	"ms-vehitrack/domain/entities"
+	"ms-vehitrack/domain/ports"
+
+	"github.com/stretchr/testify/require"
+)
+
+type fakeTelemetryPublisher struct {
+	err      error
+	received []entities.Telemetry
+}
+
+func (f *fakeTelemetryPublisher) Publish(_ context.Context, telemetry entities.Telemetry) error {
+	f.received = append(f.received, telemetry)
+	return f.err
+}
+
+func TestPublishTelemetryUseCase_Success(t *testing.T) {
+	publisher := &fakeTelemetryPublisher{}
+	useCase := usecases.NewPublishTelemetryUseCase(publisher)
+
+	telemetry := validTelemetry()
+	err := useCase.Execute(context.Background(), telemetry)
+
+	require.NoError(t, err)
+	require.Len(t, publisher.received, 1)
+	require.Equal(t, telemetry.DeviceID, publisher.received[0].DeviceID)
+}
+
+func TestPublishTelemetryUseCase_ValidationError(t *testing.T) {
+	publisher := &fakeTelemetryPublisher{}
+	useCase := usecases.NewPublishTelemetryUseCase(publisher)
+
+	telemetry := validTelemetry()
+	telemetry.DeviceID = ""
+
+	err := useCase.Execute(context.Background(), telemetry)
+
+	require.ErrorIs(t, err, entities.ErrInvalidTelemetryDeviceID)
+	require.Empty(t, publisher.received)
+}
+
+func TestPublishTelemetryUseCase_PublishError(t *testing.T) {
+	publisher := &fakeTelemetryPublisher{err: ports.ErrTelemetryPublishFailed}
+	useCase := usecases.NewPublishTelemetryUseCase(publisher)
+
+	err := useCase.Execute(context.Background(), validTelemetry())
+
+	require.Error(t, err)
+	require.True(t, errors.Is(err, ports.ErrTelemetryPublishFailed))
+}
+
+func TestTelemetryValidate(t *testing.T) {
+	require.NoError(t, validTelemetry().Validate())
+
+	invalid := validTelemetry()
+	invalid.Latitude = 120
+	require.ErrorIs(t, invalid.Validate(), entities.ErrInvalidTelemetryLatitude)
+}
+
+func validTelemetry() entities.Telemetry {
+	return entities.Telemetry{
+		DeviceID:    "logan2021",
+		Timestamp:   time.Date(2026, 7, 28, 15, 30, 0, 0, time.UTC),
+		Latitude:    10.98,
+		Longitude:   -74.80,
+		SpeedGPS:    82,
+		SpeedOBD:    81,
+		RPM:         2500,
+		CoolantTemp: 91,
+		FuelLevel:   44,
+		Protocol:    "CAN11",
+		VIN:         "VF1XXXXXXXX",
+	}
+}

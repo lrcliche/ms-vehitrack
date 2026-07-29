@@ -14,6 +14,19 @@ func Map(err error) AppError {
 		return New(http.StatusNotFound, "product-not-found", "Product not found")
 	case errors.Is(err, entities.ErrInvalidProductName), errors.Is(err, entities.ErrInvalidProductPrice):
 		return New(http.StatusUnprocessableEntity, "validation-error", err.Error())
+	case errors.Is(err, entities.ErrInvalidTelemetryDeviceID),
+		errors.Is(err, entities.ErrInvalidTelemetryTimestamp),
+		errors.Is(err, entities.ErrInvalidTelemetryLatitude),
+		errors.Is(err, entities.ErrInvalidTelemetryLongitude),
+		errors.Is(err, entities.ErrInvalidTelemetryProtocol),
+		errors.Is(err, entities.ErrInvalidTelemetryVIN),
+		errors.Is(err, entities.ErrInvalidTelemetrySpeedGPS),
+		errors.Is(err, entities.ErrInvalidTelemetrySpeedOBD),
+		errors.Is(err, entities.ErrInvalidTelemetryRPM),
+		errors.Is(err, entities.ErrInvalidTelemetryFuelLevel):
+		return New(http.StatusUnprocessableEntity, "validation-error", err.Error())
+	case errors.Is(err, ports.ErrTelemetryPublishFailed):
+		return New(http.StatusBadGateway, "telemetry-publish-failed", "Failed to publish telemetry")
 	default:
 		return New(http.StatusInternalServerError, "internal-server-error", "Internal Error")
 	}

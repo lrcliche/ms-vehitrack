@@ -21,6 +21,7 @@ func MustLoad() Config {
 	if err != nil {
 		log.Println("No .env file found")
 	}
+
 	cfg := Config{
 		AppEnv:              getEnv("APP_ENV", "development"),
 		HTTPPort:            getEnv("HTTP_PORT", "8080"),

@@ -20,6 +20,7 @@ func New(appContainer *container.Container) *gin.Engine {
 	})
 
 	productHandler := appContainer.ResolveProductHandler()
+	telemetryHandler := appContainer.ResolveTelemetryHandler()
 
 	v1 := engine.Group("/api/v1")
 	{
@@ -31,6 +32,8 @@ func New(appContainer *container.Container) *gin.Engine {
 			products.PUT("/:id", productHandler.Update)
 			products.DELETE("/:id", productHandler.Delete)
 		}
+
+		v1.POST("/telemetry", telemetryHandler.Publish)
 	}
 
 	return engine
