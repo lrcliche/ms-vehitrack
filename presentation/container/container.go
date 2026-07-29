@@ -15,7 +15,6 @@ import (
 	gcppubsub "ms-vehitrack/infrastructure/gcp/pubsub"
 	gcpstorage "ms-vehitrack/infrastructure/gcp/storage"
 	"ms-vehitrack/infrastructure/publishers"
-	"ms-vehitrack/infrastructure/repositories"
 	"ms-vehitrack/presentation/handlers"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -33,16 +32,13 @@ type Container struct {
 	storageClient  *gcpstorage.Client
 
 	// domain ports
-	productRepository  ports.ProductRepository
 	telemetryPublisher ports.TelemetryPublisherPort
 
 	// application
-	productService          services.ProductService
 	telemetryService        services.TelemetryService
 	publishTelemetryUseCase usecases.PublishTelemetryUseCase
 
 	// presentation
-	productHandler   *handlers.ProductHandler
 	telemetryHandler *handlers.TelemetryHandler
 }
 
@@ -97,19 +93,9 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 		publishers.NewPubSubTelemetryPublisher(pubSubClient, gcpCfg),
 	)
 
-	var productRepository ports.ProductRepository
-	if dbPool != nil {
-		productRepository = repositories.NewPostgresProductRepository(dbPool)
-	}
-
 	// use cases + services
 	publishTelemetryUseCase := usecases.NewPublishTelemetryUseCase(telemetryPublisher)
 	telemetryService := services.NewTelemetryService(publishTelemetryUseCase)
-
-	var productService services.ProductService
-	if productRepository != nil {
-		productService = services.NewProductService(productRepository)
-	}
 
 	return &Container{
 		config:                  cfg,
@@ -118,9 +104,7 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 		bigQueryClient:          bigQueryClient,
 		pubSubClient:            pubSubClient,
 		storageClient:           storageClient,
-		productRepository:       productRepository,
 		telemetryPublisher:      telemetryPublisher,
-		productService:          productService,
 		telemetryService:        telemetryService,
 		publishTelemetryUseCase: publishTelemetryUseCase,
 	}, nil
@@ -176,16 +160,8 @@ func (c *Container) StorageClient() *gcpstorage.Client {
 	return c.storageClient
 }
 
-func (c *Container) ResolveProductRepository() ports.ProductRepository {
-	return c.productRepository
-}
-
 func (c *Container) ResolveTelemetryPublisher() ports.TelemetryPublisherPort {
 	return c.telemetryPublisher
-}
-
-func (c *Container) ResolveProductService() services.ProductService {
-	return c.productService
 }
 
 func (c *Container) ResolvePublishTelemetryUseCase() usecases.PublishTelemetryUseCase {
@@ -194,16 +170,6 @@ func (c *Container) ResolvePublishTelemetryUseCase() usecases.PublishTelemetryUs
 
 func (c *Container) ResolveTelemetryService() services.TelemetryService {
 	return c.telemetryService
-}
-
-func (c *Container) ResolveProductHandler() *handlers.ProductHandler {
-	if !c.PostgresEnabled() {
-		return nil
-	}
-	if c.productHandler == nil {
-		c.productHandler = handlers.NewProductHandler(c)
-	}
-	return c.productHandler
 }
 
 func (c *Container) ResolveTelemetryHandler() *handlers.TelemetryHandler {

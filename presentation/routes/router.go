@@ -23,18 +23,6 @@ func New(appContainer *container.Container) *gin.Engine {
 
 	v1 := engine.Group("/api/v1")
 	{
-		if appContainer.PostgresEnabled() {
-			productHandler := appContainer.ResolveProductHandler()
-			products := v1.Group("/products")
-			{
-				products.POST("", productHandler.Create)
-				products.GET("", productHandler.List)
-				products.GET("/:id", productHandler.GetByID)
-				products.PUT("/:id", productHandler.Update)
-				products.DELETE("/:id", productHandler.Delete)
-			}
-		}
-
 		v1.POST("/telemetry", telemetryHandler.Publish)
 	}
 

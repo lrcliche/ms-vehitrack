@@ -33,16 +33,16 @@ else
   pass "application does not import infrastructure"
 fi
 
-if ! rg -n 'domain/ports' application/services --glob '*.go' >/dev/null 2>&1; then
-  fail "application services must depend on repository ports"
+if ! rg -n 'domain/ports' application --glob '*.go' >/dev/null 2>&1; then
+  fail "application layer must depend on domain ports"
 else
-  pass "application services depend on repository ports"
+  pass "application layer depends on domain ports"
 fi
 
-if ! rg -n 'var _ .*ProductRepository' infrastructure/repositories --glob '*.go' >/dev/null 2>&1; then
-  fail "infrastructure repositories should assert interface compliance"
+if ! rg -n 'var _ .*TelemetryPublisherPort' infrastructure/publishers --glob '*.go' >/dev/null 2>&1; then
+  fail "infrastructure publishers should assert interface compliance"
 else
-  pass "repository implementation asserts port compliance"
+  pass "publisher implementation asserts port compliance"
 fi
 
 if rg -n 'services\.New[A-Za-z]+\(' --glob '*.go' --glob '!**/*_test.go' --glob '!tests/**' --glob '!presentation/container/**' . >/dev/null 2>&1; then

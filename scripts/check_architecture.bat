@@ -29,12 +29,20 @@ if %errorlevel%==0 (
   echo [PASS] application does not import infrastructure
 )
 
-findstr /S /N /I "domain/ports" application\services\*.go >nul 2>&1
+findstr /S /N /I "domain/ports" application\*.go >nul 2>&1
 if not %errorlevel%==0 (
-  echo [FAIL] application services must depend on repository ports
+  echo [FAIL] application layer must depend on domain ports
   exit /b 1
 ) else (
-  echo [PASS] application services depend on repository ports
+  echo [PASS] application layer depends on domain ports
+)
+
+findstr /S /N /C:"var _ ports.TelemetryPublisherPort" infrastructure\publishers\*.go >nul 2>&1
+if not %errorlevel%==0 (
+  echo [FAIL] infrastructure publishers should assert interface compliance
+  exit /b 1
+) else (
+  echo [PASS] publisher implementation asserts port compliance
 )
 
 go test ./...
