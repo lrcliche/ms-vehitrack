@@ -7,16 +7,18 @@ import (
 )
 
 var (
-	ErrInvalidTelemetryDeviceID   = errors.New("telemetry deviceId is required")
-	ErrInvalidTelemetryTimestamp  = errors.New("telemetry timestamp is required")
-	ErrInvalidTelemetryLatitude   = errors.New("telemetry latitude must be between -90 and 90")
-	ErrInvalidTelemetryLongitude  = errors.New("telemetry longitude must be between -180 and 180")
-	ErrInvalidTelemetryProtocol   = errors.New("telemetry protocol is required")
-	ErrInvalidTelemetryVIN        = errors.New("telemetry vin is required")
-	ErrInvalidTelemetrySpeedGPS   = errors.New("telemetry speedGps must be greater than or equal to zero")
-	ErrInvalidTelemetrySpeedOBD   = errors.New("telemetry speedObd must be greater than or equal to zero")
-	ErrInvalidTelemetryRPM        = errors.New("telemetry rpm must be greater than or equal to zero")
-	ErrInvalidTelemetryFuelLevel  = errors.New("telemetry fuelLevel must be between 0 and 100")
+	ErrInvalidTelemetryDeviceID  = errors.New("telemetry deviceId is required")
+	ErrInvalidTelemetryTimestamp = errors.New("telemetry timestamp is required")
+	ErrInvalidTelemetryLatitude  = errors.New("telemetry latitude must be between -90 and 90")
+	ErrInvalidTelemetryLongitude = errors.New("telemetry longitude must be between -180 and 180")
+	ErrInvalidTelemetryProtocol  = errors.New("telemetry protocol is required")
+	ErrInvalidTelemetryVIN       = errors.New("telemetry vin is required")
+	ErrInvalidTelemetrySpeedGPS  = errors.New("telemetry speedGps must be greater than or equal to zero")
+	ErrInvalidTelemetrySpeedOBD  = errors.New("telemetry speedObd must be greater than or equal to zero")
+	ErrInvalidTelemetryRPM       = errors.New("telemetry rpm must be greater than or equal to zero")
+	ErrInvalidTelemetryFuelLevel = errors.New("telemetry fuelLevel must be between 0 and 100")
+	ErrStaleTelemetryTimestamp   = errors.New("telemetry timestamp is too old")
+	ErrFutureTelemetryTimestamp  = errors.New("telemetry timestamp is too far in the future")
 )
 
 // Telemetry represents an OBD-II telemetry event from a vehicle device.
@@ -36,6 +38,11 @@ type Telemetry struct {
 
 // Validate checks business rules for a telemetry event.
 func (t Telemetry) Validate() error {
+	return t.ValidateWithClock(time.Now().UTC(), 24*time.Hour, 5*time.Minute)
+}
+
+// ValidateWithClock validates telemetry using an explicit clock and freshness windows.
+func (t Telemetry) ValidateWithClock(now time.Time, maxAge, maxSkew time.Duration) error {
 	if strings.TrimSpace(t.DeviceID) == "" {
 		return ErrInvalidTelemetryDeviceID
 	}
@@ -65,6 +72,14 @@ func (t Telemetry) Validate() error {
 	}
 	if strings.TrimSpace(t.VIN) == "" {
 		return ErrInvalidTelemetryVIN
+	}
+
+	ts := t.Timestamp.UTC()
+	if maxAge > 0 && now.Sub(ts) > maxAge {
+		return ErrStaleTelemetryTimestamp
+	}
+	if maxSkew > 0 && ts.Sub(now) > maxSkew {
+		return ErrFutureTelemetryTimestamp
 	}
 
 	return nil

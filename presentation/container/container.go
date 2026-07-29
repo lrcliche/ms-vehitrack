@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"ms-vehitrack/application/config"
 	"ms-vehitrack/application/services"
@@ -16,8 +17,6 @@ import (
 	gcpstorage "ms-vehitrack/infrastructure/gcp/storage"
 	"ms-vehitrack/infrastructure/publishers"
 	"ms-vehitrack/presentation/handlers"
-
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Container struct {
@@ -26,7 +25,7 @@ type Container struct {
 	gcpConfig gcpconfig.Config
 
 	// infrastructure (technical adapters, not used by handlers)
-	dbPool         *pgxpool.Pool
+	dbPool         *database.Pool
 	bigQueryClient *gcpbigquery.Client
 	pubSubClient   *gcppubsub.Client
 	storageClient  *gcpstorage.Client
@@ -43,7 +42,7 @@ type Container struct {
 }
 
 func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
-	var dbPool *pgxpool.Pool
+	var dbPool *database.Pool
 	if cfg.PostgresEnabled {
 		pool, err := database.NewPostgresPool(ctx, cfg.PostgresDSN)
 		if err != nil {
@@ -55,7 +54,7 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 		log.Printf("[CONTAINER] operation=postgres status=disabled")
 	}
 
-	cleanup := func() {
+	cleanupDB := func() {
 		if dbPool != nil {
 			dbPool.Close()
 		}
@@ -63,38 +62,56 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 
 	gcpCfg, err := gcpconfig.Load()
 	if err != nil {
-		cleanup()
+		cleanupDB()
 		return nil, fmt.Errorf("load gcp config: %w", err)
-	}
-
-	bigQueryClient, err := gcpbigquery.NewClient(ctx, gcpCfg)
-	if err != nil {
-		cleanup()
-		return nil, err
 	}
 
 	pubSubClient, err := gcppubsub.NewClient(ctx, gcpCfg)
 	if err != nil {
-		_ = bigQueryClient.Close()
-		cleanup()
+		cleanupDB()
 		return nil, err
 	}
 
-	storageClient, err := gcpstorage.NewClient(ctx, gcpCfg)
-	if err != nil {
-		_ = pubSubClient.Close()
-		_ = bigQueryClient.Close()
-		cleanup()
-		return nil, err
+	var bigQueryClient *gcpbigquery.Client
+	if gcpCfg.BigQueryEnabled {
+		client, err := gcpbigquery.NewClient(ctx, gcpCfg)
+		if err != nil {
+			_ = pubSubClient.Close()
+			cleanupDB()
+			return nil, err
+		}
+		bigQueryClient = client
+		log.Printf("[CONTAINER] operation=bigquery status=enabled")
+	} else {
+		log.Printf("[CONTAINER] operation=bigquery status=disabled")
 	}
 
-	// ports
+	var storageClient *gcpstorage.Client
+	if gcpCfg.StorageEnabled {
+		client, err := gcpstorage.NewClient(ctx, gcpCfg)
+		if err != nil {
+			if bigQueryClient != nil {
+				_ = bigQueryClient.Close()
+			}
+			_ = pubSubClient.Close()
+			cleanupDB()
+			return nil, err
+		}
+		storageClient = client
+		log.Printf("[CONTAINER] operation=storage status=enabled")
+	} else {
+		log.Printf("[CONTAINER] operation=storage status=disabled")
+	}
+
 	telemetryPublisher := ports.TelemetryPublisherPort(
 		publishers.NewPubSubTelemetryPublisher(pubSubClient, gcpCfg),
 	)
 
-	// use cases + services
-	publishTelemetryUseCase := usecases.NewPublishTelemetryUseCase(telemetryPublisher)
+	publishTelemetryUseCase := usecases.NewPublishTelemetryUseCase(
+		telemetryPublisher,
+		time.Duration(cfg.TelemetryMaxAgeSeconds)*time.Second,
+		time.Duration(cfg.TelemetryMaxSkewSeconds)*time.Second,
+	)
 	telemetryService := services.NewTelemetryService(publishTelemetryUseCase)
 
 	return &Container{
@@ -127,6 +144,19 @@ func (c *Container) PostgresEnabled() bool {
 	return c.config.PostgresEnabled && c.dbPool != nil
 }
 
+// Ready checks runtime dependencies required to accept traffic.
+func (c *Container) Ready(ctx context.Context) error {
+	if c.pubSubClient == nil || !c.pubSubClient.Ready() {
+		return fmt.Errorf("pubsub client is not ready")
+	}
+	if c.PostgresEnabled() {
+		if err := c.dbPool.Ping(ctx); err != nil {
+			return fmt.Errorf("postgres is not ready: %w", err)
+		}
+	}
+	return nil
+}
+
 func (c *Container) Close() {
 	if c.storageClient != nil {
 		if err := c.storageClient.Close(); err != nil {
@@ -146,18 +176,6 @@ func (c *Container) Close() {
 	if c.dbPool != nil {
 		c.dbPool.Close()
 	}
-}
-
-func (c *Container) BigQueryClient() *gcpbigquery.Client {
-	return c.bigQueryClient
-}
-
-func (c *Container) PubSubClient() *gcppubsub.Client {
-	return c.pubSubClient
-}
-
-func (c *Container) StorageClient() *gcpstorage.Client {
-	return c.storageClient
 }
 
 func (c *Container) ResolveTelemetryPublisher() ports.TelemetryPublisherPort {

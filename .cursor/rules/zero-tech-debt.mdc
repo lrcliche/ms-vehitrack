@@ -1,0 +1,35 @@
+---
+description: Política de cero deuda técnica para ms-vehitrack
+alwaysApply: true
+---
+
+# Cero deuda técnica
+
+Fuente canónica: `docs/zeroTechDebtIA.md`.
+
+## Checklist antes de merge
+
+- Sin secrets/PII en logs (DSN, VIN, API keys, tokens).
+- Sin hardcodes de project IDs, topics, passwords o URLs de prod.
+- Sin endpoints abiertos en `/api/v1/*` (API key + rate limit).
+- Sin dependencias obligatorias no usadas (no forzar BQ/Storage/PG).
+- Sin publish síncrono bloqueante en el hot path HTTP.
+- Sin scaffold muerto (products, TODOs, código comentado, getters muertos).
+- DTOs HTTP ≠ entities de dominio.
+- Errores tipados + `fmt.Errorf("%w")`; sin `panic` de negocio.
+- Tests del caso de uso/servicio tocado.
+- Actualizar `.env.example` si agregas env vars.
+
+## Estructura permitida
+
+```text
+cmd/api
+domain/{entities,ports}
+application/{config,services,usecases}
+infrastructure/{database,gcp,publishers,repositories}
+presentation/{container,handlers,dto,routes,middleware,errors,responses,logging,server}
+migrations  # solo SQL manual en /migrations
+tests docs scripts
+```
+
+No crear `utils/`, `common/`, `helpers/`, `shared/` genéricos.

@@ -25,7 +25,9 @@ func (f *fakeTelemetryPublisher) Publish(_ context.Context, telemetry entities.T
 }
 
 func newTelemetryService(publisher ports.TelemetryPublisherPort) services.TelemetryService {
-	return services.NewTelemetryService(usecases.NewPublishTelemetryUseCase(publisher))
+	return services.NewTelemetryService(
+		usecases.NewPublishTelemetryUseCase(publisher, 24*time.Hour, 5*time.Minute),
+	)
 }
 
 func TestTelemetryService_PublishSuccess(t *testing.T) {
@@ -69,12 +71,20 @@ func TestTelemetryValidate(t *testing.T) {
 	invalid := validTelemetry()
 	invalid.Latitude = 120
 	require.ErrorIs(t, invalid.Validate(), entities.ErrInvalidTelemetryLatitude)
+
+	stale := validTelemetry()
+	stale.Timestamp = time.Now().UTC().Add(-48 * time.Hour)
+	require.ErrorIs(t, stale.Validate(), entities.ErrStaleTelemetryTimestamp)
+
+	future := validTelemetry()
+	future.Timestamp = time.Now().UTC().Add(1 * time.Hour)
+	require.ErrorIs(t, future.Validate(), entities.ErrFutureTelemetryTimestamp)
 }
 
 func validTelemetry() entities.Telemetry {
 	return entities.Telemetry{
 		DeviceID:    "logan2021",
-		Timestamp:   time.Date(2026, 7, 28, 15, 30, 0, 0, time.UTC),
+		Timestamp:   time.Now().UTC(),
 		Latitude:    10.98,
 		Longitude:   -74.80,
 		SpeedGPS:    82,

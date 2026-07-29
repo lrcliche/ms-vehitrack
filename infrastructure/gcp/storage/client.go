@@ -20,10 +20,12 @@ type Client struct {
 
 // NewClient creates a Cloud Storage client using GCP configuration.
 func NewClient(ctx context.Context, cfg gcpconfig.Config) (*Client, error) {
-	client, err := storage.NewClient(
-		ctx,
-		option.WithCredentialsFile(cfg.CredentialsFile),
-	)
+	opts := make([]option.ClientOption, 0, 1)
+	if cfg.HasCredentialsFile() {
+		opts = append(opts, option.WithCredentialsFile(cfg.CredentialsFile))
+	}
+
+	client, err := storage.NewClient(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("create storage client: %w", err)
 	}

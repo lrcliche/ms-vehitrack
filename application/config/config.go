@@ -10,29 +10,49 @@ import (
 )
 
 type Config struct {
-	AppEnv              string
-	HTTPPort            string
-	ReadTimeoutSeconds  int
-	WriteTimeoutSeconds int
-	PostgresEnabled     bool
-	PostgresDSN         string
+	AppEnv                   string
+	HTTPPort                 string
+	ReadTimeoutSeconds       int
+	WriteTimeoutSeconds      int
+	ReadHeaderTimeoutSeconds int
+	IdleTimeoutSeconds       int
+	ShutdownTimeoutSeconds   int
+	MaxBodyBytes             int64
+	APIKey                   string
+	RateLimitRPS             float64
+	RateLimitBurst           int
+	PostgresEnabled          bool
+	PostgresDSN              string
+	TelemetryMaxAgeSeconds   int
+	TelemetryMaxSkewSeconds  int
 }
 
 func MustLoad() Config {
-	err := godotenv.Load()
-	if err != nil {
+	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found")
 	}
 
 	cfg := Config{
-		AppEnv:              getEnv("APP_ENV", "development"),
-		HTTPPort:            getEnv("HTTP_PORT", "8080"),
-		ReadTimeoutSeconds:  getEnvAsInt("READ_TIMEOUT_SECONDS", 10),
-		WriteTimeoutSeconds: getEnvAsInt("WRITE_TIMEOUT_SECONDS", 10),
-		PostgresEnabled:     getEnvAsBool("POSTGRES_ENABLED", false),
-		PostgresDSN:         os.Getenv("POSTGRES_DSN"),
+		AppEnv:                   getEnv("APP_ENV", "development"),
+		HTTPPort:                 getEnv("HTTP_PORT", "8080"),
+		ReadTimeoutSeconds:       getEnvAsInt("READ_TIMEOUT_SECONDS", 10),
+		WriteTimeoutSeconds:      getEnvAsInt("WRITE_TIMEOUT_SECONDS", 10),
+		ReadHeaderTimeoutSeconds: getEnvAsInt("READ_HEADER_TIMEOUT_SECONDS", 5),
+		IdleTimeoutSeconds:       getEnvAsInt("IDLE_TIMEOUT_SECONDS", 60),
+		ShutdownTimeoutSeconds:   getEnvAsInt("SHUTDOWN_TIMEOUT_SECONDS", 10),
+		MaxBodyBytes:             int64(getEnvAsInt("MAX_BODY_BYTES", 65536)),
+		APIKey:                   os.Getenv("API_KEY"),
+		RateLimitRPS:             getEnvAsFloat("RATE_LIMIT_RPS", 20),
+		RateLimitBurst:           getEnvAsInt("RATE_LIMIT_BURST", 40),
+		PostgresEnabled:          getEnvAsBool("POSTGRES_ENABLED", false),
+		PostgresDSN:              os.Getenv("POSTGRES_DSN"),
+		TelemetryMaxAgeSeconds:   getEnvAsInt("TELEMETRY_MAX_AGE_SECONDS", 86400),
+		TelemetryMaxSkewSeconds:  getEnvAsInt("TELEMETRY_MAX_SKEW_SECONDS", 300),
 	}
 
+	if cfg.APIKey == "" {
+		log.Fatal("API_KEY is required")
+	}
 	if cfg.PostgresEnabled && cfg.PostgresDSN == "" {
 		log.Fatal("POSTGRES_DSN is required when POSTGRES_ENABLED=true")
 	}
@@ -52,12 +72,22 @@ func getEnvAsInt(key string, fallback int) int {
 	if value == "" {
 		return fallback
 	}
-
 	parsed, err := strconv.Atoi(value)
 	if err != nil {
 		return fallback
 	}
+	return parsed
+}
 
+func getEnvAsFloat(key string, fallback float64) float64 {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return fallback
+	}
 	return parsed
 }
 
@@ -66,11 +96,9 @@ func getEnvAsBool(key string, fallback bool) bool {
 	if value == "" {
 		return fallback
 	}
-
 	parsed, err := strconv.ParseBool(value)
 	if err != nil {
 		return fallback
 	}
-
 	return parsed
 }

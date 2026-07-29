@@ -3,6 +3,7 @@ package pubsub
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -21,11 +22,12 @@ type Client struct {
 
 // NewClient creates a Pub/Sub client using GCP configuration.
 func NewClient(ctx context.Context, cfg gcpconfig.Config) (*Client, error) {
-	client, err := pubsub.NewClient(
-		ctx,
-		cfg.ProjectID,
-		option.WithCredentialsFile(cfg.CredentialsFile),
-	)
+	opts := make([]option.ClientOption, 0, 1)
+	if cfg.HasCredentialsFile() {
+		opts = append(opts, option.WithCredentialsFile(cfg.CredentialsFile))
+	}
+
+	client, err := pubsub.NewClient(ctx, cfg.ProjectID, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("create pubsub client: %w", err)
 	}
@@ -55,31 +57,41 @@ func (c *Client) Topic(topicID string) (*pubsub.Publisher, error) {
 	return publisher, nil
 }
 
-// Publish publishes raw message data to the given topic and waits for the server ack.
-func (c *Client) Publish(ctx context.Context, topicID string, data []byte, attributes map[string]string) (string, error) {
+// PublishAsync enqueues a message for publish and returns once accepted by the local client.
+// Delivery acknowledgment is confirmed asynchronously to keep the HTTP hot path non-blocking.
+func (c *Client) PublishAsync(ctx context.Context, topicID string, data []byte, attributes map[string]string) error {
 	if len(data) == 0 {
-		return "", fmt.Errorf("pubsub message data is required")
+		return fmt.Errorf("pubsub message data is required")
 	}
 
 	publisher, err := c.Topic(topicID)
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, c.timeout)
-	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("publish pubsub message to %s: %w", topicID, err)
+	}
 
 	result := publisher.Publish(ctx, &pubsub.Message{
 		Data:       data,
 		Attributes: attributes,
 	})
 
-	messageID, err := result.Get(ctx)
-	if err != nil {
-		return "", fmt.Errorf("publish pubsub message to %s: %w", topicID, err)
-	}
+	go func() {
+		ackCtx, cancel := context.WithTimeout(context.Background(), c.timeout)
+		defer cancel()
+		if _, err := result.Get(ackCtx); err != nil {
+			log.Printf("[PUBSUB] operation=PublishAsync status=ack-failed topic=%s error=%v", topicID, err)
+		}
+	}()
 
-	return messageID, nil
+	return nil
+}
+
+// Ready reports whether the client is initialized.
+func (c *Client) Ready() bool {
+	return c != nil && c.client != nil
 }
 
 // Close stops publishers and releases Pub/Sub client resources.

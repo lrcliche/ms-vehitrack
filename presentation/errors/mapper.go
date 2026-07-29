@@ -19,7 +19,9 @@ func Map(err error) AppError {
 		errors.Is(err, entities.ErrInvalidTelemetrySpeedGPS),
 		errors.Is(err, entities.ErrInvalidTelemetrySpeedOBD),
 		errors.Is(err, entities.ErrInvalidTelemetryRPM),
-		errors.Is(err, entities.ErrInvalidTelemetryFuelLevel):
+		errors.Is(err, entities.ErrInvalidTelemetryFuelLevel),
+		errors.Is(err, entities.ErrStaleTelemetryTimestamp),
+		errors.Is(err, entities.ErrFutureTelemetryTimestamp):
 		return New(http.StatusUnprocessableEntity, "validation-error", err.Error())
 	case errors.Is(err, ports.ErrTelemetryPublishFailed):
 		return New(http.StatusBadGateway, "telemetry-publish-failed", "Failed to publish telemetry")
@@ -30,8 +32,4 @@ func Map(err error) AppError {
 
 func BadRequest(message string) AppError {
 	return New(http.StatusBadRequest, "bad-request", message)
-}
-
-func Conflict(code, message string) AppError {
-	return New(http.StatusConflict, code, message)
 }

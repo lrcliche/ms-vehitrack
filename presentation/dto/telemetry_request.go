@@ -10,8 +10,8 @@ import (
 type TelemetryRequest struct {
 	DeviceID    string    `json:"deviceId" binding:"required"`
 	Timestamp   time.Time `json:"timestamp" binding:"required"`
-	Latitude    float64   `json:"latitude"`
-	Longitude   float64   `json:"longitude"`
+	Latitude    *float64  `json:"latitude" binding:"required"`
+	Longitude   *float64  `json:"longitude" binding:"required"`
 	SpeedGPS    float64   `json:"speedGps"`
 	SpeedOBD    float64   `json:"speedObd"`
 	RPM         float64   `json:"rpm"`
@@ -23,11 +23,19 @@ type TelemetryRequest struct {
 
 // ToDomain maps the HTTP DTO into a domain Telemetry entity.
 func (r TelemetryRequest) ToDomain() entities.Telemetry {
+	var latitude, longitude float64
+	if r.Latitude != nil {
+		latitude = *r.Latitude
+	}
+	if r.Longitude != nil {
+		longitude = *r.Longitude
+	}
+
 	return entities.Telemetry{
 		DeviceID:    r.DeviceID,
 		Timestamp:   r.Timestamp.UTC(),
-		Latitude:    r.Latitude,
-		Longitude:   r.Longitude,
+		Latitude:    latitude,
+		Longitude:   longitude,
 		SpeedGPS:    r.SpeedGPS,
 		SpeedOBD:    r.SpeedOBD,
 		RPM:         r.RPM,

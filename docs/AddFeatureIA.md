@@ -10,7 +10,7 @@ Goals:
 - Reduce accidental modifications to unrelated areas.
 - Keep generated code maintainable and production-ready.
 
-This guide must be used together with `docs/architectureIA.md`.
+This guide must be used together with `docs/architectureIA.md` and `docs/zeroTechDebtIA.md`.
 
 ---
 

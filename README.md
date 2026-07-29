@@ -15,11 +15,16 @@ Microservicio Go para tracking de vehículos, con arquitectura hexagonal y API R
 
 The architecture guard script (`scripts/check_architecture.sh`) enforces these boundaries.
 
+Reglas anti-deuda (obligatorias para agentes y humanos): `docs/zeroTechDebtIA.md` y `.cursor/rules/`.
+
+Contrato de consumo front (telemetría): `docs/contrato.md`.
+
 ## Prerequisites
 
-- Go 1.22+
-- PostgreSQL (for runtime persistence)
+- Go 1.25+
+- Google Cloud credentials (ADC or `GOOGLE_APPLICATION_CREDENTIALS`)
 - [Air](https://github.com/air-verse/air) for live reload in dev mode
+- PostgreSQL only if `POSTGRES_ENABLED=true`
 
 Install Air:
 
@@ -35,7 +40,16 @@ go install github.com/air-verse/air@latest
 make up
 ```
 
-2. Adjust `.env` values if needed (especially `POSTGRES_DSN`).
+2. Set required values in `.env`, especially `API_KEY`, `GCP_PROJECT_ID`, `GCP_PUBSUB_TOPIC`.
+
+## Healthcheck
+
+The API exposes:
+
+- `GET /health` — liveness
+- `GET /ready` — readiness (Pub/Sub client; Postgres if enabled)
+
+Protected routes under `/api/v1/*` require header `X-API-Key`.
 
 ## Local Development Flow
 
@@ -89,20 +103,3 @@ make lint-safe
 - `make architecture-check` — hexagonal boundary checks
 - `make build` — build binary in `./bin`
 - `make clean` — remove generated artifacts
-
-## Healthcheck
-
-The API exposes:
-
-- `GET /health`
-
-Expected response:
-
-```json
-{
-  "errors": [],
-  "data": {
-    "status": "ok"
-  }
-}
-```

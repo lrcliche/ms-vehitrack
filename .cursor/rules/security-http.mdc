@@ -1,0 +1,25 @@
+---
+description: Seguridad, observabilidad y APIs HTTP en ms-vehitrack
+globs: presentation/**/*.go,infrastructure/**/*.go,application/config/**/*.go
+alwaysApply: false
+---
+
+# Seguridad y HTTP
+
+- `/api/v1/*` exige `X-API-Key` y rate limit.
+- `/health` = liveness; `/ready` = readiness real (deps).
+- Limitar body (`MAX_BODY_BYTES`); headers de seguridad activos.
+- Recovery debe loguear panics; nunca tragarlos en silencio.
+- Pub/Sub attributes: sin VIN ni PII; sí `idempotencyKey`.
+- Credenciales: preferir ADC; archivo solo vía `GOOGLE_APPLICATION_CREDENTIALS`.
+- Config solo por env; validar en load; sin defaults secretos.
+
+```go
+// ❌ BAD
+log.Printf("dsn=%s", dsn)
+attributes["vin"] = telemetry.VIN
+
+// ✅ GOOD
+log.Printf("host=%s", redactDSNHost(dsn))
+attributes["idempotencyKey"] = deviceID + "|" + ts
+```

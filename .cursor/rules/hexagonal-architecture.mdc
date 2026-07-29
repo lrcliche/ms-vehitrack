@@ -1,0 +1,36 @@
+---
+description: Arquitectura hexagonal obligatoria de ms-vehitrack
+alwaysApply: true
+---
+
+# Arquitectura hexagonal (ms-vehitrack)
+
+Flujo obligatorio:
+
+```text
+Handler → Service → UseCase → Port → Adapter
+```
+
+## Capas
+
+- `domain/`: entities + ports. Cero imports de application/infrastructure/presentation.
+- `application/`: services + usecases + config. Solo depende de `domain`.
+- `infrastructure/`: adapters (GCP, DB, publishers). Implementan ports.
+- `presentation/`: handlers, dto, routes, middleware, errors, container, server.
+- `cmd/api/`: solo bootstrap.
+
+## Prohibido
+
+- Handler → Port / Repository / cliente GCP / SQL
+- Service → Infrastructure
+- Domain → cualquier capa externa
+- Lógica de negocio en handlers, middleware o adapters
+- Wire de `services.New*` / `usecases.New*` fuera de `presentation/container`
+
+## Container
+
+- Cablea ports, usecases, services y handlers.
+- No exponer getters de clientes concretos GCP/DB a handlers.
+- Postgres, BigQuery y Storage son opcionales; Pub/Sub es requerido para telemetría.
+
+Antes de terminar un cambio: `go test ./...` y respetar `scripts/check_architecture.sh`.

@@ -20,11 +20,12 @@ type Client struct {
 
 // NewClient creates a BigQuery client using GCP configuration.
 func NewClient(ctx context.Context, cfg gcpconfig.Config) (*Client, error) {
-	client, err := bigquery.NewClient(
-		ctx,
-		cfg.ProjectID,
-		option.WithCredentialsFile(cfg.CredentialsFile),
-	)
+	opts := make([]option.ClientOption, 0, 1)
+	if cfg.HasCredentialsFile() {
+		opts = append(opts, option.WithCredentialsFile(cfg.CredentialsFile))
+	}
+
+	client, err := bigquery.NewClient(ctx, cfg.ProjectID, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("create bigquery client: %w", err)
 	}

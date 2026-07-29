@@ -15,11 +15,10 @@ import (
 	"ms-vehitrack/presentation/routes"
 )
 
-const shutdownTimeout = 10 * time.Second
-
 type Server struct {
 	container  *container.Container
 	httpServer *http.Server
+	shutdown   time.Duration
 }
 
 func NewServer(ctx context.Context, cfg config.Config) (*Server, error) {
@@ -33,13 +32,17 @@ func NewServer(ctx context.Context, cfg config.Config) (*Server, error) {
 	httpServer := &http.Server{
 		Addr:              ":" + cfg.HTTPPort,
 		Handler:           engine,
-		ReadHeaderTimeout: 5 * time.Second,
+		ReadHeaderTimeout: time.Duration(cfg.ReadHeaderTimeoutSeconds) * time.Second,
 		ReadTimeout:       time.Duration(cfg.ReadTimeoutSeconds) * time.Second,
 		WriteTimeout:      time.Duration(cfg.WriteTimeoutSeconds) * time.Second,
-		IdleTimeout:       60 * time.Second,
+		IdleTimeout:       time.Duration(cfg.IdleTimeoutSeconds) * time.Second,
 	}
 
-	return &Server{container: appContainer, httpServer: httpServer}, nil
+	return &Server{
+		container:  appContainer,
+		httpServer: httpServer,
+		shutdown:   time.Duration(cfg.ShutdownTimeoutSeconds) * time.Second,
+	}, nil
 }
 
 func (s *Server) Run() error {
@@ -69,7 +72,7 @@ func (s *Server) Run() error {
 	case <-stopSignal:
 	}
 
-	shutdownContext, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	shutdownContext, cancel := context.WithTimeout(context.Background(), s.shutdown)
 	defer cancel()
 
 	if err := s.httpServer.Shutdown(shutdownContext); err != nil {

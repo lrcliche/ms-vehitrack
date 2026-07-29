@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"ms-vehitrack/domain/entities"
@@ -32,7 +33,7 @@ func NewPubSubTelemetryPublisher(client *gcppubsub.Client, cfg gcpconfig.Config)
 	}
 }
 
-// Publish serializes telemetry as JSON and publishes it to the configured topic.
+// Publish serializes telemetry as JSON and enqueues it asynchronously on Pub/Sub.
 func (p *PubSubTelemetryPublisher) Publish(ctx context.Context, telemetry entities.Telemetry) error {
 	payload, err := json.Marshal(telemetry)
 	if err != nil {
@@ -40,14 +41,15 @@ func (p *PubSubTelemetryPublisher) Publish(ctx context.Context, telemetry entiti
 	}
 
 	attributes := map[string]string{
-		"deviceId": telemetry.DeviceID,
-		"protocol": telemetry.Protocol,
-		"vin":      telemetry.VIN,
+		"deviceId":        telemetry.DeviceID,
+		"protocol":        telemetry.Protocol,
+		"idempotencyKey":  telemetryIdempotencyKey(telemetry),
+		"eventTimestamp":  telemetry.Timestamp.UTC().Format(time.RFC3339Nano),
 	}
 
 	var lastErr error
 	for attempt := 1; attempt <= p.retries; attempt++ {
-		if _, err := p.client.Publish(ctx, p.topicID, payload, attributes); err != nil {
+		if err := p.client.PublishAsync(ctx, p.topicID, payload, attributes); err != nil {
 			lastErr = err
 			if attempt == p.retries {
 				break
@@ -67,4 +69,8 @@ func (p *PubSubTelemetryPublisher) Publish(ctx context.Context, telemetry entiti
 	}
 
 	return fmt.Errorf("%w: %v", ports.ErrTelemetryPublishFailed, lastErr)
+}
+
+func telemetryIdempotencyKey(telemetry entities.Telemetry) string {
+	return telemetry.DeviceID + "|" + strconv.FormatInt(telemetry.Timestamp.UTC().UnixNano(), 10)
 }

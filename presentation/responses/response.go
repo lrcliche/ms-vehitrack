@@ -30,7 +30,3 @@ func Error(c *gin.Context, statusCode int, code, message string) {
 func ErrorFromApp(c *gin.Context, appError presentationerrors.AppError) {
 	Error(c, appError.Status, appError.Code, appError.Message)
 }
-
-func Forbidden(c *gin.Context) {
-	c.Status(403)
-}

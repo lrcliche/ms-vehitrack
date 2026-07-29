@@ -34,6 +34,7 @@ The architecture check script (`scripts/check_architecture.sh`) enforces core bo
 application/
   config/
   services/
+  usecases/
 
 domain/
   entities/
@@ -41,24 +42,38 @@ domain/
 
 infrastructure/
   database/
+  gcp/
+    config/
+    bigquery/
+    pubsub/
+    storage/
+  publishers/
   repositories/
 
 presentation/
   container/
   handlers/
+  dto/
   routes/
   responses/
   errors/
   middleware/
   logging/
+  server/
 
 cmd/api/main.go
 
 docs/
+  architectureIA.md
+  AddFeatureIA.md
+  zeroTechDebtIA.md
 scripts/
 tests/
 migrations/
+.cursor/rules/
 ```
+
+Governance for zero technical debt: `docs/zeroTechDebtIA.md`.
 
 ---
 
