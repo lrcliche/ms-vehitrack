@@ -25,6 +25,8 @@ func Map(err error) AppError {
 		return New(http.StatusUnprocessableEntity, "validation-error", err.Error())
 	case errors.Is(err, ports.ErrTelemetryPublishFailed):
 		return New(http.StatusBadGateway, "telemetry-publish-failed", "Failed to publish telemetry")
+	case errors.Is(err, ports.ErrTelemetryStoreFailed):
+		return New(http.StatusBadGateway, "telemetry-store-failed", "Failed to store telemetry")
 	default:
 		return New(http.StatusInternalServerError, "internal-server-error", "Internal Error")
 	}

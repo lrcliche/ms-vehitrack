@@ -16,6 +16,7 @@ type Config struct {
 	PubSubTopic               string
 	BigQueryEnabled           bool
 	BigQueryDataset           string
+	BigQueryTable             string
 	StorageEnabled            bool
 	StorageBucket             string
 	ClientTimeout             time.Duration
@@ -46,6 +47,7 @@ func Load() (Config, error) {
 		PubSubTopic:               os.Getenv("GCP_PUBSUB_TOPIC"),
 		BigQueryEnabled:           getEnvAsBool("GCP_BIGQUERY_ENABLED", false),
 		BigQueryDataset:           os.Getenv("GCP_BIGQUERY_DATASET"),
+		BigQueryTable:             os.Getenv("GCP_BIGQUERY_TABLE"),
 		StorageEnabled:            getEnvAsBool("GCP_STORAGE_ENABLED", false),
 		StorageBucket:             os.Getenv("GCP_STORAGE_BUCKET"),
 		ClientTimeout:             time.Duration(timeoutSeconds) * time.Second,
@@ -83,6 +85,9 @@ func (c Config) validate() error {
 	}
 	if c.BigQueryEnabled && c.BigQueryDataset == "" {
 		return fmt.Errorf("GCP_BIGQUERY_DATASET is required when GCP_BIGQUERY_ENABLED=true")
+	}
+	if c.BigQueryEnabled && c.BigQueryTable == "" {
+		return fmt.Errorf("GCP_BIGQUERY_TABLE is required when GCP_BIGQUERY_ENABLED=true")
 	}
 	if c.StorageEnabled && c.StorageBucket == "" {
 		return fmt.Errorf("GCP_STORAGE_BUCKET is required when GCP_STORAGE_ENABLED=true")

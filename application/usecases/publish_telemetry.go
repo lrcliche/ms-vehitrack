@@ -16,21 +16,28 @@ type PublishTelemetryUseCase interface {
 }
 
 type publishTelemetryUseCase struct {
-	publisher  ports.TelemetryPublisherPort
-	maxAge     time.Duration
-	maxSkew    time.Duration
+	publisher ports.TelemetryPublisherPort
+	store     ports.TelemetryStorePort
+	maxAge    time.Duration
+	maxSkew   time.Duration
 }
 
 // NewPublishTelemetryUseCase creates a PublishTelemetryUseCase.
-func NewPublishTelemetryUseCase(publisher ports.TelemetryPublisherPort, maxAge, maxSkew time.Duration) PublishTelemetryUseCase {
+// store may be nil when BigQuery persistence is disabled.
+func NewPublishTelemetryUseCase(
+	publisher ports.TelemetryPublisherPort,
+	store ports.TelemetryStorePort,
+	maxAge, maxSkew time.Duration,
+) PublishTelemetryUseCase {
 	return &publishTelemetryUseCase{
 		publisher: publisher,
+		store:     store,
 		maxAge:    maxAge,
 		maxSkew:   maxSkew,
 	}
 }
 
-// Execute validates telemetry and publishes it through the domain port.
+// Execute validates telemetry, publishes to messaging, and optionally stores in analytics.
 func (uc *publishTelemetryUseCase) Execute(ctx context.Context, telemetry entities.Telemetry) error {
 	start := time.Now()
 
@@ -42,6 +49,13 @@ func (uc *publishTelemetryUseCase) Execute(ctx context.Context, telemetry entiti
 	if err := uc.publisher.Publish(ctx, telemetry); err != nil {
 		log.Printf("[PUBLISH_TELEMETRY_USECASE] operation=Publish error=%v", err)
 		return fmt.Errorf("publish telemetry for device %s: %w", telemetry.DeviceID, err)
+	}
+
+	if uc.store != nil {
+		if err := uc.store.Save(ctx, telemetry); err != nil {
+			log.Printf("[PUBLISH_TELEMETRY_USECASE] operation=Store error=%v", err)
+			return fmt.Errorf("store telemetry for device %s: %w", telemetry.DeviceID, err)
+		}
 	}
 
 	log.Printf(

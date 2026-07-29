@@ -16,28 +16,25 @@ import (
 	gcppubsub "ms-vehitrack/infrastructure/gcp/pubsub"
 	gcpstorage "ms-vehitrack/infrastructure/gcp/storage"
 	"ms-vehitrack/infrastructure/publishers"
+	"ms-vehitrack/infrastructure/stores"
 	"ms-vehitrack/presentation/handlers"
 )
 
 type Container struct {
-	// config
 	config    config.Config
 	gcpConfig gcpconfig.Config
 
-	// infrastructure (technical adapters, not used by handlers)
 	dbPool         *database.Pool
 	bigQueryClient *gcpbigquery.Client
 	pubSubClient   *gcppubsub.Client
 	storageClient  *gcpstorage.Client
 
-	// domain ports
 	telemetryPublisher ports.TelemetryPublisherPort
+	telemetryStore     ports.TelemetryStorePort
 
-	// application
 	telemetryService        services.TelemetryService
 	publishTelemetryUseCase usecases.PublishTelemetryUseCase
 
-	// presentation
 	telemetryHandler *handlers.TelemetryHandler
 }
 
@@ -73,6 +70,7 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 	}
 
 	var bigQueryClient *gcpbigquery.Client
+	var telemetryStore ports.TelemetryStorePort
 	if gcpCfg.BigQueryEnabled {
 		client, err := gcpbigquery.NewClient(ctx, gcpCfg)
 		if err != nil {
@@ -81,7 +79,16 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 			return nil, err
 		}
 		bigQueryClient = client
-		log.Printf("[CONTAINER] operation=bigquery status=enabled")
+
+		store, err := stores.NewBigQueryTelemetryStore(ctx, client, gcpCfg)
+		if err != nil {
+			_ = bigQueryClient.Close()
+			_ = pubSubClient.Close()
+			cleanupDB()
+			return nil, err
+		}
+		telemetryStore = store
+		log.Printf("[CONTAINER] operation=bigquery status=enabled dataset=%s table=%s", gcpCfg.BigQueryDataset, gcpCfg.BigQueryTable)
 	} else {
 		log.Printf("[CONTAINER] operation=bigquery status=disabled")
 	}
@@ -109,6 +116,7 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 
 	publishTelemetryUseCase := usecases.NewPublishTelemetryUseCase(
 		telemetryPublisher,
+		telemetryStore,
 		time.Duration(cfg.TelemetryMaxAgeSeconds)*time.Second,
 		time.Duration(cfg.TelemetryMaxSkewSeconds)*time.Second,
 	)
@@ -122,6 +130,7 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 		pubSubClient:            pubSubClient,
 		storageClient:           storageClient,
 		telemetryPublisher:      telemetryPublisher,
+		telemetryStore:          telemetryStore,
 		telemetryService:        telemetryService,
 		publishTelemetryUseCase: publishTelemetryUseCase,
 	}, nil
@@ -139,15 +148,16 @@ func (c *Container) GCPConfig() gcpconfig.Config {
 	return c.gcpConfig
 }
 
-// PostgresEnabled reports whether PostgreSQL was configured and connected.
 func (c *Container) PostgresEnabled() bool {
 	return c.config.PostgresEnabled && c.dbPool != nil
 }
 
-// Ready checks runtime dependencies required to accept traffic.
 func (c *Container) Ready(ctx context.Context) error {
 	if c.pubSubClient == nil || !c.pubSubClient.Ready() {
 		return fmt.Errorf("pubsub client is not ready")
+	}
+	if c.gcpConfig.BigQueryEnabled && c.telemetryStore == nil {
+		return fmt.Errorf("bigquery store is not ready")
 	}
 	if c.PostgresEnabled() {
 		if err := c.dbPool.Ping(ctx); err != nil {
@@ -180,6 +190,10 @@ func (c *Container) Close() {
 
 func (c *Container) ResolveTelemetryPublisher() ports.TelemetryPublisherPort {
 	return c.telemetryPublisher
+}
+
+func (c *Container) ResolveTelemetryStore() ports.TelemetryStorePort {
+	return c.telemetryStore
 }
 
 func (c *Container) ResolvePublishTelemetryUseCase() usecases.PublishTelemetryUseCase {

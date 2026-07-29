@@ -7,6 +7,7 @@ import (
 
 	"cloud.google.com/go/bigquery"
 	gcpconfig "ms-vehitrack/infrastructure/gcp/config"
+	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
 )
 
@@ -48,6 +49,28 @@ func (c *Client) Dataset() string {
 	return c.dataset
 }
 
+// EnsureDatasetAndTable creates dataset/table when missing.
+func (c *Client) EnsureDatasetAndTable(ctx context.Context, table string, schema bigquery.Schema) error {
+	if table == "" {
+		return fmt.Errorf("bigquery table is required")
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
+
+	dataset := c.client.Dataset(c.dataset)
+	if err := dataset.Create(ctx, &bigquery.DatasetMetadata{Location: "US"}); err != nil && !isAlreadyExists(err) {
+		return fmt.Errorf("create bigquery dataset %s: %w", c.dataset, err)
+	}
+
+	meta := &bigquery.TableMetadata{Schema: schema}
+	if err := dataset.Table(table).Create(ctx, meta); err != nil && !isAlreadyExists(err) {
+		return fmt.Errorf("create bigquery table %s.%s: %w", c.dataset, table, err)
+	}
+
+	return nil
+}
+
 // InsertRows inserts rows into the given table within the configured dataset.
 func (c *Client) InsertRows(ctx context.Context, table string, rows interface{}) error {
 	if table == "" {
@@ -77,4 +100,9 @@ func (c *Client) Close() error {
 		return fmt.Errorf("close bigquery client: %w", err)
 	}
 	return nil
+}
+
+func isAlreadyExists(err error) bool {
+	apiErr, ok := err.(*googleapi.Error)
+	return ok && apiErr.Code == 409
 }

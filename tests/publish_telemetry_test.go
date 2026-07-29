@@ -26,7 +26,7 @@ func (f *fakeTelemetryPublisher) Publish(_ context.Context, telemetry entities.T
 
 func newTelemetryService(publisher ports.TelemetryPublisherPort) services.TelemetryService {
 	return services.NewTelemetryService(
-		usecases.NewPublishTelemetryUseCase(publisher, 24*time.Hour, 5*time.Minute),
+		usecases.NewPublishTelemetryUseCase(publisher, nil, 24*time.Hour, 5*time.Minute),
 	)
 }
 
