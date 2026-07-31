@@ -16,3 +16,15 @@ services:
     volumes:
       - ./configs/gcp/service-account.json:/secrets/service-account.json:ro
     restart: unless-stopped
+
+  vehitrack-tiles:
+    image: maptiler/tileserver-gl:latest
+    container_name: vehitrack-osm-tiles
+    ports:
+      - "20000:8080"
+    volumes:
+      - ./colombia.mbtiles:/data/colombia.mbtiles:ro
+    command:
+      - --mbtiles
+      - /data/colombia.mbtiles
+    restart: unless-stopped
