@@ -43,6 +43,7 @@ func New(appContainer *container.Container) *gin.Engine {
 
 	telemetryHandler := appContainer.ResolveTelemetryHandler()
 	trafficHandler := handlers.NewTrafficHandler(appContainer)
+	geocodeHandler := handlers.NewGeocodeHandler(appContainer)
 
 	v1 := engine.Group("/api/v1")
 	v1.Use(middleware.APIKeyAuth(cfg.APIKey))
@@ -51,6 +52,18 @@ func New(appContainer *container.Container) *gin.Engine {
 		v1.POST("/telemetry", telemetryHandler.Publish)
 		v1.POST("/traffic/batches", trafficHandler.IngestBatch)
 		v1.GET("/traffic/aggregates", trafficHandler.Aggregates)
+
+		// Geocoding y diccionario: rutas GLOBALES (geo.* no lleva tenant). DeviceContext solo
+		// extrae X-Device-Id para auditoría/ranking; no resuelve tenant.
+		geo := v1.Group("")
+		geo.Use(middleware.DeviceContext())
+		{
+			geo.GET("/geocode/autocomplete", geocodeHandler.Autocomplete)
+			geo.POST("/geocode/search", geocodeHandler.Search)
+			geo.POST("/geocode/reverse", geocodeHandler.Reverse)
+			geo.POST("/geocode/normalize", geocodeHandler.Normalize)
+			geo.GET("/dictionary", geocodeHandler.Dictionary)
+		}
 	}
 
 	return engine
