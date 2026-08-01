@@ -78,6 +78,13 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 
 	var bigQueryClient *gcpbigquery.Client
 	var telemetryStore ports.TelemetryStorePort
+
+	// Preferencia: Postgres vía tracking.prc_ingest_telemetry (reemplaza BigQuery).
+	if dbPool != nil {
+		telemetryStore = stores.NewPostgresTelemetryStore(dbPool)
+		log.Printf("[CONTAINER] operation=telemetry-store status=postgres-prc_ingest_telemetry")
+	}
+
 	if gcpCfg.BigQueryEnabled {
 		client, err := gcpbigquery.NewClient(ctx, gcpCfg)
 		if err != nil {
@@ -87,17 +94,21 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 		}
 		bigQueryClient = client
 
-		store, err := stores.NewBigQueryTelemetryStore(ctx, client, gcpCfg)
-		if err != nil {
-			_ = bigQueryClient.Close()
-			_ = pubSubClient.Close()
-			cleanupDB()
-			return nil, err
+		if telemetryStore == nil {
+			store, err := stores.NewBigQueryTelemetryStore(ctx, client, gcpCfg)
+			if err != nil {
+				_ = bigQueryClient.Close()
+				_ = pubSubClient.Close()
+				cleanupDB()
+				return nil, err
+			}
+			telemetryStore = store
+			log.Printf("[CONTAINER] operation=bigquery status=enabled dataset=%s table=%s", gcpCfg.BigQueryDataset, gcpCfg.BigQueryTable)
+		} else {
+			log.Printf("[CONTAINER] operation=bigquery status=skipped-postgres-preferred")
 		}
-		telemetryStore = store
-		log.Printf("[CONTAINER] operation=bigquery status=enabled dataset=%s table=%s", gcpCfg.BigQueryDataset, gcpCfg.BigQueryTable)
-	} else {
-		log.Printf("[CONTAINER] operation=bigquery status=disabled")
+	} else if telemetryStore == nil {
+		log.Printf("[CONTAINER] operation=telemetry-store status=disabled")
 	}
 
 	var storageClient *gcpstorage.Client
@@ -235,8 +246,8 @@ func (c *Container) Ready(ctx context.Context) error {
 	if c.pubSubClient == nil || !c.pubSubClient.Ready() {
 		return fmt.Errorf("pubsub client is not ready")
 	}
-	if c.gcpConfig.BigQueryEnabled && c.telemetryStore == nil {
-		return fmt.Errorf("bigquery store is not ready")
+	if c.telemetryStore == nil && c.gcpConfig.BigQueryEnabled {
+		return fmt.Errorf("telemetry store is not ready")
 	}
 	if c.PostgresEnabled() {
 		if err := c.dbPool.Ping(ctx); err != nil {
