@@ -11,11 +11,13 @@ import (
 	"ms-vehitrack/application/usecases"
 	"ms-vehitrack/domain/ports"
 	"ms-vehitrack/infrastructure/database"
+	"ms-vehitrack/infrastructure/cache"
 	gcpbigquery "ms-vehitrack/infrastructure/gcp/bigquery"
 	gcpconfig "ms-vehitrack/infrastructure/gcp/config"
 	gcppubsub "ms-vehitrack/infrastructure/gcp/pubsub"
 	gcpstorage "ms-vehitrack/infrastructure/gcp/storage"
 	"ms-vehitrack/infrastructure/publishers"
+	"ms-vehitrack/infrastructure/repositories"
 	"ms-vehitrack/infrastructure/stores"
 	"ms-vehitrack/presentation/handlers"
 )
@@ -28,14 +30,19 @@ type Container struct {
 	bigQueryClient *gcpbigquery.Client
 	pubSubClient   *gcppubsub.Client
 	storageClient  *gcpstorage.Client
+	redisCache     *cache.RedisTrafficCache
 
 	telemetryPublisher ports.TelemetryPublisherPort
 	telemetryStore     ports.TelemetryStorePort
+	trafficStore       ports.TrafficStorePort
+	trafficCache       ports.TrafficCachePort
 
 	telemetryService        services.TelemetryService
+	trafficService          services.TrafficService
 	publishTelemetryUseCase usecases.PublishTelemetryUseCase
 
 	telemetryHandler *handlers.TelemetryHandler
+	aggStop          context.CancelFunc
 }
 
 func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
@@ -122,6 +129,56 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 	)
 	telemetryService := services.NewTelemetryService(publishTelemetryUseCase)
 
+	var trafficStore ports.TrafficStorePort
+	var trafficCache ports.TrafficCachePort
+	var redisCache *cache.RedisTrafficCache
+	var trafficService services.TrafficService
+	var aggStop context.CancelFunc
+
+	if dbPool != nil {
+		trafficStore = repositories.NewPostgresTrafficStore(dbPool)
+		log.Printf("[CONTAINER] operation=traffic-store status=postgres")
+	} else {
+		log.Printf("[CONTAINER] operation=traffic-store status=disabled")
+	}
+
+	if cfg.RedisEnabled {
+		rc, err := cache.NewRedisTrafficCache(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
+		if err != nil {
+			if bigQueryClient != nil {
+				_ = bigQueryClient.Close()
+			}
+			_ = pubSubClient.Close()
+			if storageClient != nil {
+				_ = storageClient.Close()
+			}
+			cleanupDB()
+			return nil, fmt.Errorf("create redis cache: %w", err)
+		}
+		redisCache = rc
+		trafficCache = rc
+		log.Printf("[CONTAINER] operation=redis status=enabled addr=%s", cfg.RedisAddr)
+	} else {
+		log.Printf("[CONTAINER] operation=redis status=disabled")
+	}
+
+	if trafficStore != nil {
+		ingestUC := usecases.NewIngestTrafficBatchUseCase(trafficStore, trafficCache)
+		getUC := usecases.NewGetTrafficAggregatesUseCase(
+			trafficStore,
+			trafficCache,
+			cfg.TrafficMinSamples,
+			cfg.TrafficMinDevices,
+			cfg.TrafficCacheTTLSeconds,
+		)
+		trafficService = services.NewTrafficService(ingestUC, getUC)
+
+		// Job ligero: refresca agregados cada 10 min.
+		aggCtx, cancel := context.WithCancel(context.Background())
+		aggStop = cancel
+		go runAggregateJob(aggCtx, trafficStore)
+	}
+
 	return &Container{
 		config:                  cfg,
 		gcpConfig:               gcpCfg,
@@ -129,11 +186,33 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 		bigQueryClient:          bigQueryClient,
 		pubSubClient:            pubSubClient,
 		storageClient:           storageClient,
+		redisCache:              redisCache,
 		telemetryPublisher:      telemetryPublisher,
 		telemetryStore:          telemetryStore,
+		trafficStore:            trafficStore,
+		trafficCache:            trafficCache,
 		telemetryService:        telemetryService,
+		trafficService:          trafficService,
 		publishTelemetryUseCase: publishTelemetryUseCase,
+		aggStop:                 aggStop,
 	}, nil
+}
+
+func runAggregateJob(ctx context.Context, store ports.TrafficStorePort) {
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := store.RefreshAggregates(ctx, nil, 60); err != nil {
+				log.Printf("[TRAFFIC] operation=refresh-aggregates error=%v", err)
+			} else {
+				log.Printf("[TRAFFIC] operation=refresh-aggregates status=ok")
+			}
+		}
+	}
 }
 
 func New(ctx context.Context, cfg config.Config) (*Container, error) {
@@ -168,6 +247,14 @@ func (c *Container) Ready(ctx context.Context) error {
 }
 
 func (c *Container) Close() {
+	if c.aggStop != nil {
+		c.aggStop()
+	}
+	if c.redisCache != nil {
+		if err := c.redisCache.Close(); err != nil {
+			log.Printf("[CONTAINER] operation=close-redis error=%v", err)
+		}
+	}
 	if c.storageClient != nil {
 		if err := c.storageClient.Close(); err != nil {
 			log.Printf("[CONTAINER] operation=close-storage error=%v", err)
@@ -209,4 +296,11 @@ func (c *Container) ResolveTelemetryHandler() *handlers.TelemetryHandler {
 		c.telemetryHandler = handlers.NewTelemetryHandler(c)
 	}
 	return c.telemetryHandler
+}
+
+func (c *Container) ResolveTrafficService() (services.TrafficService, bool) {
+	if c.trafficService == nil {
+		return nil, false
+	}
+	return c.trafficService, true
 }

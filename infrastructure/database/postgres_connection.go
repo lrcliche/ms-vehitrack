@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -50,6 +52,22 @@ func (p *Pool) Close() {
 	if p != nil && p.inner != nil {
 		p.inner.Close()
 	}
+}
+
+func (p *Pool) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
+	return p.inner.Exec(ctx, sql, args...)
+}
+
+func (p *Pool) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
+	return p.inner.Query(ctx, sql, args...)
+}
+
+func (p *Pool) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
+	return p.inner.QueryRow(ctx, sql, args...)
+}
+
+func (p *Pool) Begin(ctx context.Context) (pgx.Tx, error) {
+	return p.inner.Begin(ctx)
 }
 
 func redactDSNHost(dsn string) string {
