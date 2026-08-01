@@ -13,8 +13,48 @@ services:
       APP_ENV: development
       HTTP_PORT: "19560"
       GOOGLE_APPLICATION_CREDENTIALS: /secrets/service-account.json
+      POSTGRES_ENABLED: "true"
+      POSTGRES_DSN: postgres://vehitrack:vehitrack@vehitrack-pg:5432/vehitrack?sslmode=disable
+      REDIS_ENABLED: "true"
+      REDIS_ADDR: vehitrack-redis:6379
     volumes:
       - ./configs/gcp/service-account.json:/secrets/service-account.json:ro
+    depends_on:
+      - vehitrack-pg
+      - vehitrack-redis
+    restart: unless-stopped
+
+  vehitrack-pg:
+    image: postgres:16-alpine
+    container_name: vehitrack-pg
+    environment:
+      POSTGRES_USER: vehitrack
+      POSTGRES_PASSWORD: vehitrack
+      POSTGRES_DB: vehitrack
+    ports:
+      - "15433:5432"
+    volumes:
+      - vehitrack_pg_data:/var/lib/postgresql/data
+      - ./migrations/001_traffic.sql:/docker-entrypoint-initdb.d/001_traffic.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vehitrack -d vehitrack"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  vehitrack-redis:
+    image: redis:7-alpine
+    container_name: vehitrack-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - vehitrack_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     restart: unless-stopped
 
   vehitrack-tiles:
@@ -28,3 +68,7 @@ services:
       - --mbtiles
       - /data/colombia.mbtiles
     restart: unless-stopped
+
+volumes:
+  vehitrack_pg_data:
+  vehitrack_redis_data:

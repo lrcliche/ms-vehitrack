@@ -23,6 +23,13 @@ type Config struct {
 	RateLimitBurst           int
 	PostgresEnabled          bool
 	PostgresDSN              string
+	RedisEnabled             bool
+	RedisAddr                string
+	RedisPassword            string
+	RedisDB                  int
+	TrafficCacheTTLSeconds   int
+	TrafficMinSamples        int
+	TrafficMinDevices        int
 	TelemetryMaxAgeSeconds   int
 	TelemetryMaxSkewSeconds  int
 }
@@ -46,6 +53,13 @@ func MustLoad() Config {
 		RateLimitBurst:           getEnvAsInt("RATE_LIMIT_BURST", 40),
 		PostgresEnabled:          getEnvAsBool("POSTGRES_ENABLED", false),
 		PostgresDSN:              os.Getenv("POSTGRES_DSN"),
+		RedisEnabled:             getEnvAsBool("REDIS_ENABLED", false),
+		RedisAddr:                getEnv("REDIS_ADDR", "localhost:6379"),
+		RedisPassword:            os.Getenv("REDIS_PASSWORD"),
+		RedisDB:                  getEnvAsInt("REDIS_DB", 0),
+		TrafficCacheTTLSeconds:   getEnvAsInt("TRAFFIC_CACHE_TTL_SECONDS", 600),
+		TrafficMinSamples:        getEnvAsInt("TRAFFIC_MIN_SAMPLES", 5),
+		TrafficMinDevices:        getEnvAsInt("TRAFFIC_MIN_DEVICES", 3),
 		TelemetryMaxAgeSeconds:   getEnvAsInt("TELEMETRY_MAX_AGE_SECONDS", 86400),
 		TelemetryMaxSkewSeconds:  getEnvAsInt("TELEMETRY_MAX_SKEW_SECONDS", 300),
 	}

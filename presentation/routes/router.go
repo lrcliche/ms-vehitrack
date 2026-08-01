@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"ms-vehitrack/presentation/container"
+	"ms-vehitrack/presentation/handlers"
 	"ms-vehitrack/presentation/middleware"
 	"ms-vehitrack/presentation/responses"
 
@@ -41,12 +42,15 @@ func New(appContainer *container.Container) *gin.Engine {
 	})
 
 	telemetryHandler := appContainer.ResolveTelemetryHandler()
+	trafficHandler := handlers.NewTrafficHandler(appContainer)
 
 	v1 := engine.Group("/api/v1")
 	v1.Use(middleware.APIKeyAuth(cfg.APIKey))
 	v1.Use(middleware.RateLimit(cfg.RateLimitRPS, cfg.RateLimitBurst))
 	{
 		v1.POST("/telemetry", telemetryHandler.Publish)
+		v1.POST("/traffic/batches", trafficHandler.IngestBatch)
+		v1.GET("/traffic/aggregates", trafficHandler.Aggregates)
 	}
 
 	return engine
