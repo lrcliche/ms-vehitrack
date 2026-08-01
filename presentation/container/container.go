@@ -8,6 +8,7 @@ import (
 
 	"ms-vehitrack/application/config"
 	"ms-vehitrack/application/geocoding"
+	"ms-vehitrack/application/packages"
 	"ms-vehitrack/application/services"
 	"ms-vehitrack/application/usecases"
 	"ms-vehitrack/domain/ports"
@@ -53,6 +54,7 @@ type Container struct {
 	osrmClient       *osrm.Client
 	tenantResolver   *tenant.Resolver
 	geocodingService *geocoding.Service
+	offlineService   *packages.Service
 }
 
 func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
@@ -217,6 +219,16 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 		log.Printf("[CONTAINER] operation=geocoding status=disabled")
 	}
 
+	// Paquetes offline: store PG (offline.* global + device.* tenant-scoped). Requiere BD.
+	var offlineService *packages.Service
+	if dbPool != nil {
+		offlineStore := repositories.NewPostgresOfflineStore(dbPool)
+		offlineService = packages.NewService(offlineStore)
+		log.Printf("[CONTAINER] operation=offline-packages status=enabled")
+	} else {
+		log.Printf("[CONTAINER] operation=offline-packages status=disabled")
+	}
+
 	return &Container{
 		config:                  cfg,
 		gcpConfig:               gcpCfg,
@@ -237,6 +249,7 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 		osrmClient:              osrmClient,
 		tenantResolver:          tenantResolver,
 		geocodingService:        geocodingService,
+		offlineService:          offlineService,
 	}, nil
 }
 
@@ -376,4 +389,13 @@ func (c *Container) ResolveGeocodingService() (*geocoding.Service, bool) {
 		return nil, false
 	}
 	return c.geocodingService, true
+}
+
+// ResolveOfflineService devuelve el servicio de paquetes offline; false si Postgres está
+// deshabilitado.
+func (c *Container) ResolveOfflineService() (*packages.Service, bool) {
+	if c.offlineService == nil {
+		return nil, false
+	}
+	return c.offlineService, true
 }

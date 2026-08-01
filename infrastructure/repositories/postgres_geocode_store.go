@@ -31,7 +31,7 @@ func (s *PostgresGeocodeStore) Search(
 		   FROM geo.fnc_search_place($1, $2, $3, $4, $5)`,
 		query, nullText(municipalityID), lat, lon, limit)
 	if err != nil {
-		return nil, fmt.Errorf("%w: search: %v", ports.ErrGeocodeStoreFailed, err)
+		return nil, fmt.Errorf("geocode search: %w", err)
 	}
 	defer rows.Close()
 
@@ -43,7 +43,7 @@ func (s *PostgresGeocodeStore) Search(
 			&r.ResultKind, &r.PlaceID, &r.StreetID, &r.IntersectionID, &r.Label, &r.Context,
 			&r.Lat, &r.Lon, &muni, &r.Confidence, &r.Resolver, &r.IsVerified,
 		); err != nil {
-			return nil, fmt.Errorf("%w: scan: %v", ports.ErrGeocodeStoreFailed, err)
+			return nil, fmt.Errorf("geocode scan: %w", err)
 		}
 		if muni != nil {
 			r.MunicipalityID = *muni
@@ -51,7 +51,7 @@ func (s *PostgresGeocodeStore) Search(
 		out = append(out, r)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("%w: rows: %v", ports.ErrGeocodeStoreFailed, err)
+		return nil, fmt.Errorf("geocode rows: %w", err)
 	}
 	return out, nil
 }
@@ -63,7 +63,7 @@ func (s *PostgresGeocodeStore) RecordHit(
 		`CALL geo.prc_record_geocode_hit($1, $2, $3, $4, $5)`,
 		placeID, query, nullText(municipalityID), nullText(deviceID), resolver)
 	if err != nil {
-		return fmt.Errorf("%w: record_hit: %v", ports.ErrGeocodeStoreFailed, err)
+		return fmt.Errorf("geocode record_hit: %w", err)
 	}
 	return nil
 }
@@ -75,7 +75,7 @@ func (s *PostgresGeocodeStore) RecordMiss(
 		`CALL geo.prc_record_geocode_miss($1, $2, $3)`,
 		nullText(deviceID), query, nullText(municipalityID))
 	if err != nil {
-		return fmt.Errorf("%w: record_miss: %v", ports.ErrGeocodeStoreFailed, err)
+		return fmt.Errorf("geocode record_miss: %w", err)
 	}
 	return nil
 }
@@ -94,7 +94,7 @@ func (s *PostgresGeocodeStore) ResolveFromProvider(
 		nullText(deviceID), query, nullText(municipalityID), payload, nil,
 	).Scan(&out)
 	if err != nil {
-		return nil, fmt.Errorf("%w: resolve_from_provider: %v", ports.ErrGeocodeStoreFailed, err)
+		return nil, fmt.Errorf("geocode resolve_from_provider: %w", err)
 	}
 	return out, nil
 }
@@ -109,7 +109,7 @@ func (s *PostgresGeocodeStore) Reverse(
 		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("%w: reverse: %v", ports.ErrGeocodeStoreFailed, err)
+		return nil, fmt.Errorf("geocode reverse: %w", err)
 	}
 	return out, nil
 }
@@ -119,7 +119,7 @@ func (s *PostgresGeocodeStore) Normalize(ctx context.Context, text string) (stri
 	err := s.pool.QueryRow(ctx,
 		`SELECT public.fnc_expand_abbreviation(public.fnc_normalize_text($1))`, text).Scan(&out)
 	if err != nil {
-		return "", fmt.Errorf("%w: normalize: %v", ports.ErrGeocodeStoreFailed, err)
+		return "", fmt.Errorf("geocode normalize: %w", err)
 	}
 	return out, nil
 }
@@ -131,7 +131,7 @@ func (s *PostgresGeocodeStore) DictionaryDelta(
 	err := s.pool.QueryRow(ctx,
 		`SELECT public.fnc_dictionary_delta($1)`, sinceVersion).Scan(&out)
 	if err != nil {
-		return nil, fmt.Errorf("%w: dictionary_delta: %v", ports.ErrGeocodeStoreFailed, err)
+		return nil, fmt.Errorf("geocode dictionary_delta: %w", err)
 	}
 	return out, nil
 }
