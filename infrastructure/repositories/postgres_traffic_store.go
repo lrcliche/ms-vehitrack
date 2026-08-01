@@ -2,130 +2,170 @@ package repositories
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"ms-vehitrack/domain/entities"
 	"ms-vehitrack/domain/ports"
 	"ms-vehitrack/infrastructure/database"
+	"ms-vehitrack/infrastructure/stores"
 )
 
-// PostgresTrafficStore implements TrafficStorePort.
+// PostgresTrafficStore implements TrafficStorePort using schema routines
+// (prc_ingest_telemetry / prc_rollup_live / fnc_aggregates_by_corridor).
+// No DML directo contra tablas crudas.
 type PostgresTrafficStore struct {
-	pool *database.Pool
+	pool     *database.Pool
+	tenantID uuid.UUID
 }
 
 func NewPostgresTrafficStore(pool *database.Pool) *PostgresTrafficStore {
-	return &PostgresTrafficStore{pool: pool}
+	return &PostgresTrafficStore{pool: pool, tenantID: stores.DefaultTenantID}
 }
 
 func (s *PostgresTrafficStore) IngestBatch(
 	ctx context.Context,
 	batch entities.TrafficBatch,
 ) (bool, error) {
+	batchID, err := parseOrNewUUID(batch.BatchID)
+	if err != nil {
+		return false, fmt.Errorf("%w: batchId: %v", ports.ErrTrafficStoreFailed, err)
+	}
+
+	deviceKey := batch.BatchID
+	if len(batch.Samples) > 0 && batch.Samples[0].SessionID != "" {
+		deviceKey = batch.Samples[0].SessionID
+	}
+	deviceID := stores.StableDeviceUUID(deviceKey)
+
+	samples, err := s.samplesToIngestJSON(ctx, batch.Samples)
+	if err != nil {
+		return false, err
+	}
+
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return false, fmt.Errorf("%w: begin: %v", ports.ErrTrafficStoreFailed, err)
 	}
 	defer tx.Rollback(ctx)
 
-	var exists bool
-	err = tx.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM traffic_batches WHERE batch_id = $1)`,
-		batch.BatchID,
-	).Scan(&exists)
-	if err != nil {
-		return false, fmt.Errorf("%w: exists: %v", ports.ErrTrafficStoreFailed, err)
-	}
-	if exists {
-		return true, tx.Commit(ctx)
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.tenant_id', $1, true)`, s.tenantID.String()); err != nil {
+		return false, fmt.Errorf("%w: set tenant: %v", ports.ErrTrafficStoreFailed, err)
 	}
 
-	_, err = tx.Exec(ctx,
-		`INSERT INTO traffic_batches (batch_id, sample_count, duplicate) VALUES ($1, $2, false)`,
-		batch.BatchID, len(batch.Samples),
+	_, err = tx.Exec(ctx, `
+		CALL device.prc_register_device(
+			$1::uuid, $2::uuid, $3::text, 'android', NULL, NULL, NULL, NULL, NULL)`,
+		deviceID, s.tenantID, deviceKey,
 	)
 	if err != nil {
-		return false, fmt.Errorf("%w: insert batch: %v", ports.ErrTrafficStoreFailed, err)
+		return false, fmt.Errorf("%w: register device: %v", ports.ErrTrafficStoreFailed, err)
 	}
 
-	for _, sample := range batch.Samples {
-		_, err = tx.Exec(ctx, `
-			INSERT INTO traffic_samples (batch_id, cell, speed_kmh, sampled_at, accuracy_m, session_id)
-			VALUES ($1, $2, $3, $4, $5, $6)`,
-			batch.BatchID,
-			sample.Cell,
-			sample.SpeedKmh,
-			sample.At.UTC(),
-			nullIfZero(sample.AccuracyM),
-			sample.SessionID,
+	var resultJSON []byte
+	err = tx.QueryRow(ctx, `
+		CALL tracking.prc_ingest_telemetry($1::uuid, $2::uuid, $3::jsonb, $4::timestamptz, NULL)`,
+		deviceID, batchID, samples, time.Now().UTC(),
+	).Scan(&resultJSON)
+	if err != nil {
+		_, execErr := tx.Exec(ctx, `
+			CALL tracking.prc_ingest_telemetry($1::uuid, $2::uuid, $3::jsonb, $4::timestamptz, NULL)`,
+			deviceID, batchID, samples, time.Now().UTC(),
 		)
-		if err != nil {
-			return false, fmt.Errorf("%w: insert sample: %v", ports.ErrTrafficStoreFailed, err)
+		if execErr != nil {
+			return false, fmt.Errorf("%w: ingest: %v", ports.ErrTrafficStoreFailed, execErr)
+		}
+	}
+
+	duplicate := false
+	if len(resultJSON) > 0 {
+		var parsed map[string]any
+		if json.Unmarshal(resultJSON, &parsed) == nil {
+			if d, ok := parsed["duplicate"].(bool); ok {
+				duplicate = d
+			}
 		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return false, fmt.Errorf("%w: commit: %v", ports.ErrTrafficStoreFailed, err)
 	}
-	return false, nil
+	return duplicate, nil
 }
 
-func nullIfZero(v float64) any {
+// samplesToIngestJSON decodes geohash cell centers in SQL and builds the
+// jsonb payload expected by tracking.prc_ingest_telemetry.
+func (s *PostgresTrafficStore) samplesToIngestJSON(
+	ctx context.Context,
+	samples []entities.TrafficSample,
+) ([]byte, error) {
+	out := make([]map[string]any, 0, len(samples))
+	for _, sample := range samples {
+		var lat, lon float64
+		err := s.pool.QueryRow(ctx, `
+			SELECT ST_Y(ST_Centroid(ST_GeomFromGeoHash($1))),
+			       ST_X(ST_Centroid(ST_GeomFromGeoHash($1)))`,
+			sample.Cell,
+		).Scan(&lat, &lon)
+		if err != nil {
+			return nil, fmt.Errorf("%w: geohash %s: %v", ports.ErrTrafficStoreFailed, sample.Cell, err)
+		}
+		row := map[string]any{
+			"lat":           lat,
+			"lon":           lon,
+			"recorded_at":   sample.At.UTC().Format(time.RFC3339Nano),
+			"speed_gps_kmh": sample.SpeedKmh,
+			"accuracy_m":    nullIfNonPositive(sample.AccuracyM),
+			"source":        "gps",
+		}
+		out = append(out, row)
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		return nil, fmt.Errorf("%w: marshal: %v", ports.ErrTrafficStoreFailed, err)
+	}
+	return b, nil
+}
+
+func nullIfNonPositive(v float64) any {
 	if v <= 0 {
 		return nil
 	}
 	return v
 }
 
+func parseOrNewUUID(raw string) (uuid.UUID, error) {
+	if u, err := uuid.Parse(raw); err == nil {
+		return u, nil
+	}
+	// Batch ids from the app may be non-UUID strings; hash to uuid v5.
+	return uuid.NewSHA1(uuid.NameSpaceOID, []byte(raw)), nil
+}
+
 func (s *PostgresTrafficStore) RefreshAggregates(
 	ctx context.Context,
-	cells []string,
+	_ []string,
 	lookbackMinutes int,
 ) error {
-	if lookbackMinutes <= 0 {
-		lookbackMinutes = 30
+	window := lookbackMinutes
+	if window <= 0 {
+		window = 30
 	}
-	since := time.Now().UTC().Add(-time.Duration(lookbackMinutes) * time.Minute)
 
-	// Recompute from samples in lookback. If cells empty → all touched recently.
-	query := `
-WITH recent AS (
-  SELECT cell,
-         (EXTRACT(HOUR FROM sampled_at)::int * 2 + CASE WHEN EXTRACT(MINUTE FROM sampled_at)::int >= 30 THEN 1 ELSE 0 END) AS slot,
-         LEFT(cell, 5) AS corridor,
-         speed_kmh,
-         session_id
-  FROM traffic_samples
-  WHERE sampled_at >= $1
-`
-	args := []any{since}
-	if len(cells) > 0 {
-		query += ` AND cell = ANY($2)`
-		args = append(args, cells)
-	}
-	query += `
-),
-agg AS (
-  SELECT cell, slot, corridor,
-         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY speed_kmh) AS median_speed_kmh,
-         COUNT(*)::int AS sample_count,
-         COUNT(DISTINCT session_id)::int AS device_count
-  FROM recent
-  GROUP BY cell, slot, corridor
-)
-INSERT INTO traffic_aggregates (cell, slot, corridor, median_speed_kmh, sample_count, device_count, updated_at)
-SELECT cell, slot, corridor, median_speed_kmh, sample_count, device_count, now()
-FROM agg
-ON CONFLICT (cell, slot, corridor) DO UPDATE SET
-  median_speed_kmh = EXCLUDED.median_speed_kmh,
-  sample_count = EXCLUDED.sample_count,
-  device_count = EXCLUDED.device_count,
-  updated_at = now()
-`
-	_, err := s.pool.Exec(ctx, query, args...)
+	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("%w: refresh: %v", ports.ErrTrafficStoreFailed, err)
+		return fmt.Errorf("%w: begin rollup: %v", ports.ErrTrafficStoreFailed, err)
+	}
+	defer tx.Rollback(ctx)
+
+	_, err = tx.Exec(ctx, `CALL traffic.prc_rollup_live($1::int, NULL)`, window)
+	if err != nil {
+		return fmt.Errorf("%w: prc_rollup_live: %v", ports.ErrTrafficStoreFailed, err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("%w: commit rollup: %v", ports.ErrTrafficStoreFailed, err)
 	}
 	return nil
 }
@@ -137,12 +177,11 @@ func (s *PostgresTrafficStore) AggregatesByCorridor(
 ) ([]entities.TrafficAggregate, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT cell, slot, corridor, median_speed_kmh, sample_count, device_count
-		FROM traffic_aggregates
-		WHERE corridor = $1 AND slot = $2
-		ORDER BY sample_count DESC
-		LIMIT 200`, corridor, slot)
+		FROM traffic.fnc_aggregates_by_corridor($1, $2::smallint, NULL)`,
+		corridor, slot,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("%w: query: %v", ports.ErrTrafficStoreFailed, err)
+		return nil, fmt.Errorf("%w: fnc_aggregates_by_corridor: %v", ports.ErrTrafficStoreFailed, err)
 	}
 	defer rows.Close()
 

@@ -23,7 +23,7 @@ type publishTelemetryUseCase struct {
 }
 
 // NewPublishTelemetryUseCase creates a PublishTelemetryUseCase.
-// store may be nil when BigQuery persistence is disabled.
+// store may be nil when persistence is disabled (no Postgres / no BigQuery).
 func NewPublishTelemetryUseCase(
 	publisher ports.TelemetryPublisherPort,
 	store ports.TelemetryStorePort,
