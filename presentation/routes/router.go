@@ -46,6 +46,9 @@ func New(appContainer *container.Container) *gin.Engine {
 	geocodeHandler := handlers.NewGeocodeHandler(appContainer)
 	offlineHandler := handlers.NewOfflineHandler(appContainer)
 	userDataHandler := handlers.NewUserDataHandler(appContainer)
+	routingHandler := handlers.NewRoutingHandler(appContainer)
+	trackingHandler := handlers.NewTrackingHandler(appContainer)
+	trafficBBoxHandler := handlers.NewTrafficBBoxHandler(appContainer)
 
 	v1 := engine.Group("/api/v1")
 	v1.Use(middleware.APIKeyAuth(cfg.APIKey))
@@ -54,6 +57,11 @@ func New(appContainer *container.Container) *gin.Engine {
 		v1.POST("/telemetry", telemetryHandler.Publish)
 		v1.POST("/traffic/batches", trafficHandler.IngestBatch)
 		v1.GET("/traffic/aggregates", trafficHandler.Aggregates)
+
+		// F7 — Lecturas de trafico por bbox: GLOBALES (traffic.* son agregados anonimos sin
+		// RLS). No llevan tenant. Se agregan junto al path GCP heredado, sin tocarlo.
+		v1.GET("/traffic/live", trafficBBoxHandler.Live)
+		v1.GET("/traffic/profile", trafficBBoxHandler.Profile)
 
 		// Geocoding y diccionario: rutas GLOBALES (geo.* no lleva tenant). DeviceContext solo
 		// extrae X-Device-Id para auditoría/ranking; no resuelve tenant.
@@ -100,6 +108,19 @@ func New(appContainer *container.Container) *gin.Engine {
 			userData.PUT("/settings/:key", userDataHandler.UpsertSetting)
 			userData.GET("/sync/changes", userDataHandler.SyncChanges)
 			userData.POST("/sync/push", userDataHandler.SyncPush)
+		}
+
+		// F4 (ruteo) + F6 (ingesta por lote, viajes, OBD): TENANT-SCOPED. routing.route_request,
+		// tracking.* y device.obd_session llevan RLS; el device y el tenant salen de
+		// TenantContext y el store abre WithTenantTx con ese tenant.
+		tracked := v1.Group("")
+		tracked.Use(middleware.TenantContext(appContainer.ResolveTenantResolver()))
+		{
+			tracked.POST("/routes", routingHandler.Route)
+			tracked.POST("/telemetry/batch", trackingHandler.TelemetryBatch)
+			tracked.POST("/trips", trackingHandler.UpsertTrip)
+			tracked.POST("/trips/:id/close", trackingHandler.CloseTrip)
+			tracked.POST("/obd/sessions", trackingHandler.UpsertObdSession)
 		}
 
 		// Registro de dispositivo: la UNICA ruta NO tenant-scoped. Personal (provision, DEFINER,
