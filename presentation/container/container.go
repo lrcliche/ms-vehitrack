@@ -9,6 +9,7 @@ import (
 	"ms-vehitrack/application/config"
 	"ms-vehitrack/application/geocoding"
 	"ms-vehitrack/application/packages"
+	"ms-vehitrack/application/userdata"
 	"ms-vehitrack/application/services"
 	"ms-vehitrack/application/usecases"
 	"ms-vehitrack/domain/ports"
@@ -55,6 +56,7 @@ type Container struct {
 	tenantResolver   *tenant.Resolver
 	geocodingService *geocoding.Service
 	offlineService   *packages.Service
+	userDataService  *userdata.Service
 }
 
 func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
@@ -240,6 +242,17 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 		log.Printf("[CONTAINER] operation=offline-packages status=disabled")
 	}
 
+	// Datos del usuario + sync + registro: store PG (device.* tenant-scoped + provision sin
+	// tenant). Requiere BD.
+	var userDataService *userdata.Service
+	if dbPool != nil {
+		userDataStore := repositories.NewPostgresUserDataStore(dbPool)
+		userDataService = userdata.NewService(userDataStore)
+		log.Printf("[CONTAINER] operation=userdata status=enabled")
+	} else {
+		log.Printf("[CONTAINER] operation=userdata status=disabled")
+	}
+
 	return &Container{
 		config:                  cfg,
 		gcpConfig:               gcpCfg,
@@ -261,6 +274,7 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 		tenantResolver:          tenantResolver,
 		geocodingService:        geocodingService,
 		offlineService:          offlineService,
+		userDataService:         userDataService,
 	}, nil
 }
 
@@ -409,4 +423,13 @@ func (c *Container) ResolveOfflineService() (*packages.Service, bool) {
 		return nil, false
 	}
 	return c.offlineService, true
+}
+
+// ResolveUserDataService devuelve el servicio de datos del usuario + sync + registro; false si
+// Postgres está deshabilitado.
+func (c *Container) ResolveUserDataService() (*userdata.Service, bool) {
+	if c.userDataService == nil {
+		return nil, false
+	}
+	return c.userDataService, true
 }

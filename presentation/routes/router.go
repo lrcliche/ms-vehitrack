@@ -45,6 +45,7 @@ func New(appContainer *container.Container) *gin.Engine {
 	trafficHandler := handlers.NewTrafficHandler(appContainer)
 	geocodeHandler := handlers.NewGeocodeHandler(appContainer)
 	offlineHandler := handlers.NewOfflineHandler(appContainer)
+	userDataHandler := handlers.NewUserDataHandler(appContainer)
 
 	v1 := engine.Group("/api/v1")
 	v1.Use(middleware.APIKeyAuth(cfg.APIKey))
@@ -83,6 +84,30 @@ func New(appContainer *container.Container) *gin.Engine {
 			regionsTenant.GET("/regions/installed", offlineHandler.ListInstalled)
 			regionsTenant.POST("/regions/:id/installed", offlineHandler.TrackPackage)
 		}
+
+		// Datos del usuario + sync bidireccional: TENANT-SCOPED (device.* con RLS). El device
+		// y el tenant salen de TenantContext; el store abre WithTenantTx con ese tenant.
+		userData := v1.Group("")
+		userData.Use(middleware.TenantContext(appContainer.ResolveTenantResolver()))
+		{
+			userData.GET("/favorites", userDataHandler.ListFavorites)
+			userData.PUT("/favorites/:id", userDataHandler.UpsertFavorite)
+			userData.DELETE("/favorites/:id", userDataHandler.DeleteFavorite)
+			userData.PUT("/places/:id", userDataHandler.UpsertPlace)
+			userData.PUT("/geofences/:id", userDataHandler.UpsertGeofence)
+			userData.POST("/geofences/events", userDataHandler.RecordGeofenceEvent)
+			userData.POST("/geofences/evaluate", userDataHandler.EvaluateGeofence)
+			userData.PUT("/settings/:key", userDataHandler.UpsertSetting)
+			userData.GET("/sync/changes", userDataHandler.SyncChanges)
+			userData.POST("/sync/push", userDataHandler.SyncPush)
+		}
+
+		// Registro de dispositivo: la UNICA ruta NO tenant-scoped. Personal (provision, DEFINER,
+		// sin tenant) vs fleet (register, con tenant) se decide en el servicio segun el body. Se
+		// acota POR IP porque expone la fabrica de tenants personales sin auth de negocio (R4).
+		v1.POST("/devices/register",
+			middleware.IPRateLimit(cfg.RegisterRateRPS, cfg.RegisterRateBurst),
+			userDataHandler.Register)
 	}
 
 	return engine
