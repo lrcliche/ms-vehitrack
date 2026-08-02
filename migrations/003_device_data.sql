@@ -721,7 +721,11 @@ BEGIN
             SELECT COALESCE(jsonb_agg(
                      (to_jsonb(w) - 'geom' - 'tenant_id' - 'account_id')
                      || CASE WHEN to_jsonb(w) ? 'geom'
-                             THEN jsonb_build_object('geom', ST_AsGeoJSON(w.geom)::jsonb)
+                             -- geom se extrae del jsonb (WKB hex) y NO como columna w.geom:
+                             -- device_setting no tiene geom y "w.geom" haría fallar el parseo
+                             -- de la consulta entera para esa entidad.
+                             THEN jsonb_build_object('geom',
+                                    ST_AsGeoJSON((to_jsonb(w) ->> 'geom')::geometry)::jsonb)
                              ELSE '{}'::jsonb END)
                      FILTER (WHERE w.deleted_at IS NULL), '[]'::jsonb),
                    COALESCE(jsonb_agg(w.id) FILTER (WHERE w.deleted_at IS NOT NULL), '[]'::jsonb),

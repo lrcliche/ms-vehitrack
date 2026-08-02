@@ -45,6 +45,10 @@ GRANT INSERT, UPDATE, DELETE ON
     device.device_setting, device.geofence_event, device.device_package
 TO vehitrack_app;
 
+-- prc_sync_push devuelve next_version leyendo `SELECT last_value FROM device.seq_sync_version`:
+-- eso exige SELECT sobre la secuencia (USAGE, otorgado en 003, solo habilita nextval/currval).
+GRANT SELECT ON SEQUENCE device.seq_sync_version TO vehitrack_app;
+
 -- tracking: ingesta de telemetría y viajes (prc_ingest_telemetry, prc_upsert_trip,
 -- prc_close_trip). position es append-only; trip/trip_track se actualizan al cerrar.
 GRANT INSERT, UPDATE, DELETE ON

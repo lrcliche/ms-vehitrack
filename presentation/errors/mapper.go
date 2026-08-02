@@ -33,6 +33,20 @@ func Map(err error) AppError {
 		return New(http.StatusUnprocessableEntity, "validation-error", err.Error())
 	case errors.Is(err, entities.ErrTrafficStoreUnavailable):
 		return New(http.StatusServiceUnavailable, "traffic-unavailable", err.Error())
+	// Validaciones baratas del modelo PG (geocoding/offline/userdata): faltan campos
+	// obligatorios en la peticion antes de tocar la BD. Son 400, no 500.
+	case errors.Is(err, entities.ErrDeviceIDRequired),
+		errors.Is(err, entities.ErrRegionIDRequired),
+		errors.Is(err, entities.ErrRouteGeojsonRequired),
+		errors.Is(err, entities.ErrIDRequired),
+		errors.Is(err, entities.ErrSettingKeyRequired),
+		errors.Is(err, entities.ErrSettingValueRequired),
+		errors.Is(err, entities.ErrEntityRequired),
+		errors.Is(err, entities.ErrSyncItemsRequired),
+		errors.Is(err, entities.ErrGeofenceIDRequired),
+		errors.Is(err, entities.ErrGeofenceWKTRequired),
+		errors.Is(err, entities.ErrRegisterAmbiguous):
+		return New(http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 	case errors.Is(err, ports.ErrTelemetryPublishFailed):
 		return New(http.StatusBadGateway, "telemetry-publish-failed", "Failed to publish telemetry")
 	case errors.Is(err, ports.ErrTelemetryStoreFailed):

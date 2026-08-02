@@ -36,6 +36,10 @@ type Config struct {
 	NominatimURL          string
 	OSRMURL               string
 	TenantCacheTTLSeconds int
+	// Registro de dispositivo: rate limit POR IP en POST /v1/devices/register (R4). Bajo a
+	// proposito: expone la fabrica de tenants personales sin auth de negocio.
+	RegisterRateRPS   float64
+	RegisterRateBurst int
 }
 
 func MustLoad() Config {
@@ -69,6 +73,8 @@ func MustLoad() Config {
 		NominatimURL:             getEnv("NOMINATIM_URL", "http://127.0.0.1:21001"),
 		OSRMURL:                  getEnv("OSRM_URL", "http://127.0.0.1:21002"),
 		TenantCacheTTLSeconds:    getEnvAsInt("TENANT_CACHE_TTL_SECONDS", 60),
+		RegisterRateRPS:          getEnvAsFloat("REGISTER_RATE_RPS", 0.2),
+		RegisterRateBurst:        getEnvAsInt("REGISTER_RATE_BURST", 5),
 	}
 
 	if cfg.APIKey == "" {
