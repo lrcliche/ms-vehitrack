@@ -52,8 +52,13 @@ func Map(err error) AppError {
 		errors.Is(err, entities.ErrSamplesRequired),
 		errors.Is(err, entities.ErrTripIDRequired),
 		errors.Is(err, entities.ErrSessionIDRequired),
+		errors.Is(err, entities.ErrGeocodeQueryRequired),
 		errors.Is(err, entities.ErrProtocolRequired):
 		return New(http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+	// Geocoding sin resultado (ni PG ni Nominatim): es 404, NO 500. La app lo trata
+	// como lista vacia; sin este caso, cada busqueda sin match ensucia el log con 500.
+	case errors.Is(err, entities.ErrGeocodeNoResult):
+		return New(http.StatusNotFound, "NOT_FOUND", "sin resultados")
 	case errors.Is(err, ports.ErrTelemetryPublishFailed):
 		return New(http.StatusBadGateway, "telemetry-publish-failed", "Failed to publish telemetry")
 	case errors.Is(err, ports.ErrTelemetryStoreFailed):
