@@ -32,6 +32,10 @@ type Config struct {
 	TrafficMinDevices        int
 	TelemetryMaxAgeSeconds   int
 	TelemetryMaxSkewSeconds  int
+	// Geo (modelo PG multi-tenant)
+	NominatimURL          string
+	OSRMURL               string
+	TenantCacheTTLSeconds int
 }
 
 func MustLoad() Config {
@@ -62,6 +66,9 @@ func MustLoad() Config {
 		TrafficMinDevices:        getEnvAsInt("TRAFFIC_MIN_DEVICES", 3),
 		TelemetryMaxAgeSeconds:   getEnvAsInt("TELEMETRY_MAX_AGE_SECONDS", 86400),
 		TelemetryMaxSkewSeconds:  getEnvAsInt("TELEMETRY_MAX_SKEW_SECONDS", 300),
+		NominatimURL:             getEnv("NOMINATIM_URL", "http://127.0.0.1:21001"),
+		OSRMURL:                  getEnv("OSRM_URL", "http://127.0.0.1:21002"),
+		TenantCacheTTLSeconds:    getEnvAsInt("TENANT_CACHE_TTL_SECONDS", 60),
 	}
 
 	if cfg.APIKey == "" {

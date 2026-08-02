@@ -43,6 +43,8 @@ func New(appContainer *container.Container) *gin.Engine {
 
 	telemetryHandler := appContainer.ResolveTelemetryHandler()
 	trafficHandler := handlers.NewTrafficHandler(appContainer)
+	geocodeHandler := handlers.NewGeocodeHandler(appContainer)
+	offlineHandler := handlers.NewOfflineHandler(appContainer)
 
 	v1 := engine.Group("/api/v1")
 	v1.Use(middleware.APIKeyAuth(cfg.APIKey))
@@ -51,6 +53,36 @@ func New(appContainer *container.Container) *gin.Engine {
 		v1.POST("/telemetry", telemetryHandler.Publish)
 		v1.POST("/traffic/batches", trafficHandler.IngestBatch)
 		v1.GET("/traffic/aggregates", trafficHandler.Aggregates)
+
+		// Geocoding y diccionario: rutas GLOBALES (geo.* no lleva tenant). DeviceContext solo
+		// extrae X-Device-Id para auditoría/ranking; no resuelve tenant.
+		geo := v1.Group("")
+		geo.Use(middleware.DeviceContext())
+		{
+			geo.GET("/geocode/autocomplete", geocodeHandler.Autocomplete)
+			geo.POST("/geocode/search", geocodeHandler.Search)
+			geo.POST("/geocode/reverse", geocodeHandler.Reverse)
+			geo.POST("/geocode/normalize", geocodeHandler.Normalize)
+			geo.GET("/dictionary", geocodeHandler.Dictionary)
+		}
+
+		// Paquetes offline GLOBALES (offline.* no lleva tenant): manifiesto de región y
+		// descarga predictiva por ruta. DeviceContext solo extrae X-Device-Id.
+		regionsGlobal := v1.Group("")
+		regionsGlobal.Use(middleware.DeviceContext())
+		{
+			regionsGlobal.GET("/regions/:id/manifest", offlineHandler.Manifest)
+			regionsGlobal.POST("/regions/for-route", offlineHandler.RegionsForRoute)
+		}
+
+		// Paquetes offline TENANT-SCOPED (device.device_package tiene RLS): listado de
+		// instalados y tracking install/touch/remove. TenantContext resuelve y fija el tenant.
+		regionsTenant := v1.Group("")
+		regionsTenant.Use(middleware.TenantContext(appContainer.ResolveTenantResolver()))
+		{
+			regionsTenant.GET("/regions/installed", offlineHandler.ListInstalled)
+			regionsTenant.POST("/regions/:id/installed", offlineHandler.TrackPackage)
+		}
 	}
 
 	return engine

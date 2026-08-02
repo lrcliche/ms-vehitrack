@@ -9,6 +9,11 @@ import (
 )
 
 func Map(err error) AppError {
+	// SQLSTATE VT* del modelo PG (rutinas prc_/fnc_) primero: son errores de negocio
+	// estampados en la BD, con su propio mapeo a HTTP (doc 03 §4).
+	if appErr, ok := MapPgError(err); ok {
+		return appErr
+	}
 	switch {
 	case errors.Is(err, entities.ErrInvalidTelemetryDeviceID),
 		errors.Is(err, entities.ErrInvalidTelemetryTimestamp),

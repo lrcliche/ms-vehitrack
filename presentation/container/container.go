@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"ms-vehitrack/application/config"
+	"ms-vehitrack/application/geocoding"
+	"ms-vehitrack/application/packages"
 	"ms-vehitrack/application/services"
 	"ms-vehitrack/application/usecases"
 	"ms-vehitrack/domain/ports"
@@ -16,9 +18,12 @@ import (
 	gcpconfig "ms-vehitrack/infrastructure/gcp/config"
 	gcppubsub "ms-vehitrack/infrastructure/gcp/pubsub"
 	gcpstorage "ms-vehitrack/infrastructure/gcp/storage"
+	"ms-vehitrack/infrastructure/nominatim"
+	"ms-vehitrack/infrastructure/osrm"
 	"ms-vehitrack/infrastructure/publishers"
 	"ms-vehitrack/infrastructure/repositories"
 	"ms-vehitrack/infrastructure/stores"
+	"ms-vehitrack/infrastructure/tenant"
 	"ms-vehitrack/presentation/handlers"
 )
 
@@ -43,6 +48,13 @@ type Container struct {
 
 	telemetryHandler *handlers.TelemetryHandler
 	aggStop          context.CancelFunc
+
+	// Geo (modelo PG multi-tenant). Listos para F1: geocoder, rutas y middleware de tenant.
+	nominatimClient  *nominatim.Client
+	osrmClient       *osrm.Client
+	tenantResolver   *tenant.Resolver
+	geocodingService *geocoding.Service
+	offlineService   *packages.Service
 }
 
 func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
@@ -190,6 +202,44 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 		go runAggregateJob(aggCtx, trafficStore)
 	}
 
+	// Clientes geo (sin conexión en construcción: solo envuelven un http.Client con base URL).
+	nominatimClient := nominatim.NewClient(cfg.NominatimURL, nil)
+	osrmClient := osrm.NewClient(cfg.OSRMURL, nil)
+
+	// Resolver de tenant: requiere BD. OJO: la Lookup debe ver todos los tenants (dueño o
+	// rol BYPASSRLS) o el tenant venir del JWT — device.device tiene RLS. Ver tenant.Lookup.
+	var tenantResolver *tenant.Resolver
+	if dbPool != nil {
+		tenantResolver = tenant.NewResolver(
+			tenant.PoolLookup(dbPool),
+			time.Duration(cfg.TenantCacheTTLSeconds)*time.Second,
+		)
+		log.Printf("[CONTAINER] operation=tenant-resolver status=enabled ttl=%ds", cfg.TenantCacheTTLSeconds)
+	} else {
+		log.Printf("[CONTAINER] operation=tenant-resolver status=disabled")
+	}
+
+	// Geocoder: store PG + proveedor Nominatim. Requiere BD (geo.* vive en PG).
+	var geocodingService *geocoding.Service
+	if dbPool != nil {
+		geoStore := repositories.NewPostgresGeocodeStore(dbPool)
+		geoProvider := nominatim.NewProvider(nominatimClient)
+		geocodingService = geocoding.NewService(geoStore, geoProvider)
+		log.Printf("[CONTAINER] operation=geocoding status=enabled")
+	} else {
+		log.Printf("[CONTAINER] operation=geocoding status=disabled")
+	}
+
+	// Paquetes offline: store PG (offline.* global + device.* tenant-scoped). Requiere BD.
+	var offlineService *packages.Service
+	if dbPool != nil {
+		offlineStore := repositories.NewPostgresOfflineStore(dbPool)
+		offlineService = packages.NewService(offlineStore)
+		log.Printf("[CONTAINER] operation=offline-packages status=enabled")
+	} else {
+		log.Printf("[CONTAINER] operation=offline-packages status=disabled")
+	}
+
 	return &Container{
 		config:                  cfg,
 		gcpConfig:               gcpCfg,
@@ -206,6 +256,11 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 		trafficService:          trafficService,
 		publishTelemetryUseCase: publishTelemetryUseCase,
 		aggStop:                 aggStop,
+		nominatimClient:         nominatimClient,
+		osrmClient:              osrmClient,
+		tenantResolver:          tenantResolver,
+		geocodingService:        geocodingService,
+		offlineService:          offlineService,
 	}, nil
 }
 
@@ -314,4 +369,44 @@ func (c *Container) ResolveTrafficService() (services.TrafficService, bool) {
 		return nil, false
 	}
 	return c.trafficService, true
+}
+
+// ResolveNominatimClient devuelve el cliente del geocoder de respaldo (siempre disponible).
+func (c *Container) ResolveNominatimClient() *nominatim.Client {
+	return c.nominatimClient
+}
+
+// ResolveOSRMClient devuelve el cliente de ruteo (siempre disponible).
+func (c *Container) ResolveOSRMClient() *osrm.Client {
+	return c.osrmClient
+}
+
+// ResolveTenantResolver devuelve el resolver de tenant; nil si Postgres está deshabilitado.
+// Lo usará el middleware TenantContext en las rutas del modelo PG (F1+).
+func (c *Container) ResolveTenantResolver() *tenant.Resolver {
+	return c.tenantResolver
+}
+
+// DBPool expone el pool para los repositorios PG (que llaman WithTenantTx). nil si Postgres
+// está deshabilitado.
+func (c *Container) DBPool() *database.Pool {
+	return c.dbPool
+}
+
+// ResolveGeocodingService devuelve el servicio de geocoding; false si Postgres está
+// deshabilitado.
+func (c *Container) ResolveGeocodingService() (*geocoding.Service, bool) {
+	if c.geocodingService == nil {
+		return nil, false
+	}
+	return c.geocodingService, true
+}
+
+// ResolveOfflineService devuelve el servicio de paquetes offline; false si Postgres está
+// deshabilitado.
+func (c *Container) ResolveOfflineService() (*packages.Service, bool) {
+	if c.offlineService == nil {
+		return nil, false
+	}
+	return c.offlineService, true
 }
