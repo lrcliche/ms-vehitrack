@@ -103,3 +103,4 @@ make lint-safe
 - `make architecture-check` — hexagonal boundary checks
 - `make build` — build binary in `./bin`
 - `make clean` — remove generated artifacts
+
