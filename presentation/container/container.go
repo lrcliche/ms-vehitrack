@@ -9,6 +9,9 @@ import (
 	"ms-vehitrack/application/config"
 	"ms-vehitrack/application/geocoding"
 	"ms-vehitrack/application/packages"
+	"ms-vehitrack/application/routing"
+	"ms-vehitrack/application/tracking"
+	"ms-vehitrack/application/trafficquery"
 	"ms-vehitrack/application/userdata"
 	"ms-vehitrack/application/services"
 	"ms-vehitrack/application/usecases"
@@ -57,6 +60,11 @@ type Container struct {
 	geocodingService *geocoding.Service
 	offlineService   *packages.Service
 	userDataService  *userdata.Service
+
+	// F4/F6/F7: ruteo (cascada OSRM), ingesta+viajes+OBD, y lecturas de trafico por bbox.
+	routingService      *routing.Service
+	trackingService     *tracking.Service
+	trafficQueryService *trafficquery.Service
 }
 
 func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
@@ -253,6 +261,36 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 		log.Printf("[CONTAINER] operation=userdata status=disabled")
 	}
 
+	// F4 — Ruteo: store PG (routing.* + device.* tenant-scoped) + motor OSRM (cascada de cache).
+	var routingService *routing.Service
+	if dbPool != nil {
+		routingStore := repositories.NewPostgresRoutingStore(dbPool)
+		routingService = routing.NewService(routingStore, osrm.NewEngine(osrmClient))
+		log.Printf("[CONTAINER] operation=routing status=enabled")
+	} else {
+		log.Printf("[CONTAINER] operation=routing status=disabled")
+	}
+
+	// F6 — Ingesta por lote + viajes + sesiones OBD: store PG (tracking.*/device.* tenant-scoped).
+	var trackingService *tracking.Service
+	if dbPool != nil {
+		trackingStore := repositories.NewPostgresTrackingStore(dbPool)
+		trackingService = tracking.NewService(trackingStore)
+		log.Printf("[CONTAINER] operation=tracking status=enabled")
+	} else {
+		log.Printf("[CONTAINER] operation=tracking status=disabled")
+	}
+
+	// F7 — Lecturas de trafico por bbox: store PG (traffic.* global, sin RLS).
+	var trafficQueryService *trafficquery.Service
+	if dbPool != nil {
+		trafficQueryStore := repositories.NewPostgresTrafficQueryStore(dbPool)
+		trafficQueryService = trafficquery.NewService(trafficQueryStore)
+		log.Printf("[CONTAINER] operation=traffic-query status=enabled")
+	} else {
+		log.Printf("[CONTAINER] operation=traffic-query status=disabled")
+	}
+
 	return &Container{
 		config:                  cfg,
 		gcpConfig:               gcpCfg,
@@ -275,6 +313,9 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 		geocodingService:        geocodingService,
 		offlineService:          offlineService,
 		userDataService:         userDataService,
+		routingService:          routingService,
+		trackingService:         trackingService,
+		trafficQueryService:     trafficQueryService,
 	}, nil
 }
 
@@ -432,4 +473,31 @@ func (c *Container) ResolveUserDataService() (*userdata.Service, bool) {
 		return nil, false
 	}
 	return c.userDataService, true
+}
+
+// ResolveRoutingService devuelve el servicio de ruteo (cascada OSRM); false si Postgres está
+// deshabilitado.
+func (c *Container) ResolveRoutingService() (*routing.Service, bool) {
+	if c.routingService == nil {
+		return nil, false
+	}
+	return c.routingService, true
+}
+
+// ResolveTrackingService devuelve el servicio de ingesta por lote + viajes + OBD; false si
+// Postgres está deshabilitado.
+func (c *Container) ResolveTrackingService() (*tracking.Service, bool) {
+	if c.trackingService == nil {
+		return nil, false
+	}
+	return c.trackingService, true
+}
+
+// ResolveTrafficQueryService devuelve el servicio de lecturas de trafico por bbox; false si
+// Postgres está deshabilitado.
+func (c *Container) ResolveTrafficQueryService() (*trafficquery.Service, bool) {
+	if c.trafficQueryService == nil {
+		return nil, false
+	}
+	return c.trafficQueryService, true
 }

@@ -45,7 +45,14 @@ func Map(err error) AppError {
 		errors.Is(err, entities.ErrSyncItemsRequired),
 		errors.Is(err, entities.ErrGeofenceIDRequired),
 		errors.Is(err, entities.ErrGeofenceWKTRequired),
-		errors.Is(err, entities.ErrRegisterAmbiguous):
+		errors.Is(err, entities.ErrRegisterAmbiguous),
+		errors.Is(err, entities.ErrWaypointsRequired),
+		errors.Is(err, entities.ErrTooFewWaypoints),
+		errors.Is(err, entities.ErrBatchIDRequired),
+		errors.Is(err, entities.ErrSamplesRequired),
+		errors.Is(err, entities.ErrTripIDRequired),
+		errors.Is(err, entities.ErrSessionIDRequired),
+		errors.Is(err, entities.ErrProtocolRequired):
 		return New(http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 	case errors.Is(err, ports.ErrTelemetryPublishFailed):
 		return New(http.StatusBadGateway, "telemetry-publish-failed", "Failed to publish telemetry")

@@ -50,14 +50,17 @@ TO vehitrack_app;
 GRANT SELECT ON SEQUENCE device.seq_sync_version TO vehitrack_app;
 
 -- tracking: ingesta de telemetría y viajes (prc_ingest_telemetry, prc_upsert_trip,
--- prc_close_trip). position es append-only; trip/trip_track se actualizan al cerrar.
-GRANT INSERT, UPDATE, DELETE ON
+-- prc_close_trip). Incluye SELECT porque las prc_ leen la fila (existe/upsert) y las
+-- políticas RLS evalúan USING antes de escribir; sin SELECT da "permiso denegado a la tabla
+-- trip". position es append-only; trip/trip_track se actualizan al cerrar.
+GRANT SELECT, INSERT, UPDATE, DELETE ON
     tracking.ingest_batch, tracking.trip, tracking.trip_track, tracking.position
 TO vehitrack_app;
 
 -- traffic: prc_ingest_telemetry deriva la observación cruda por tenant. Los agregados
--- globales (live_state/profile) los escribe el cron como dueño, no la app.
-GRANT INSERT ON traffic.observation TO vehitrack_app;
+-- globales (live_state/profile) los escribe el cron como dueño, no la app. SELECT+INSERT:
+-- la ingesta puede leer la observación para idempotencia.
+GRANT SELECT, INSERT ON traffic.observation TO vehitrack_app;
 
 -- routing: cache de rutas OSRM + registro de peticiones (hit rate).
 GRANT INSERT, UPDATE ON routing.route_cache TO vehitrack_app;
