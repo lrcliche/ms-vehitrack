@@ -8,21 +8,15 @@
 -- Fuente: DANE — Divipola (datos.gov.co, recurso gdxc-w37w). 33 divisiones (32 dptos +
 -- Bogota D.C.). 1104 filas = 1103 tipo 'Municipio' + San Andres (el DANE lo tipa 'Isla',
 -- pero es la capital del archipielago y se navega, asi que se incluye). Se EXCLUYEN las
--- 18 areas no municipalizadas de Amazonia/Orinoquia: no son municipios (no van en esta tabla).
+-- 18 areas no municipalizadas de Amazonia/Orinoquia: no son municipios.
 --
--- id            : co-<iso>-<slug>   iso = ISO 3166-2:CO del dpto en minuscula
---                 (DANE 08 Atlantico -> atl -> co-atl-barranquilla, igual al seed manual).
--- department_id : co-<iso>          public.municipality.department_id es text libre, sin FK.
--- name          : nombre para mostrar (contexto del resultado de busqueda).
--- geom          : NULL a proposito. El poligono real (MultiPolygon) llega con el import OSM
---                 de limites admin; sin el, el municipio es etiqueta (fnc_resolve_grid_cell
---                 no lo ubica, pero la busqueda por nombre si).
---
--- Idempotente: ON CONFLICT (id) DO NOTHING. Convive con co-atl-barranquilla / -soledad ya
--- sembrados por seeds/dictionary_co.sql. El ' -- DANE <cod>' casa cada fila con OSM/DANE.
+-- id = co-<iso>-<slug> (iso = ISO 3166-2:CO en minuscula). department_id = co-<iso> (text
+-- libre, sin FK). geom NULL: la carga import_municipality_geom.(ps1|sh). Idempotente:
+-- ON CONFLICT (id) DO NOTHING. SET client_encoding hace la carga a prueba de consola cp1252.
 -- =====================================================================================
 
 BEGIN;
+SET client_encoding TO 'UTF8';
 
 -- ANT · Antioquia (DANE 05) — 125 municipios
 INSERT INTO public.municipality (id, department_id, name) VALUES
@@ -150,7 +144,7 @@ INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-ant-yarumal',                    'co-ant', 'Yarumal'),  -- DANE 05887
   ('co-ant-yolombo',                    'co-ant', 'Yolombó'),  -- DANE 05890
   ('co-ant-yondo',                      'co-ant', 'Yondó'),  -- DANE 05893
-  ('co-ant-zaragoza',                   'co-ant', 'Zaragoza');  -- DANE 05895
+  ('co-ant-zaragoza',                   'co-ant', 'Zaragoza')  -- DANE 05895
 ON CONFLICT (id) DO NOTHING;
 
 -- ATL · Atlántico (DANE 08) — 23 municipios
@@ -177,12 +171,12 @@ INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-atl-soledad',           'co-atl', 'Soledad'),  -- DANE 08758
   ('co-atl-suan',              'co-atl', 'Suan'),  -- DANE 08770
   ('co-atl-tubara',            'co-atl', 'Tubará'),  -- DANE 08832
-  ('co-atl-usiacuri',          'co-atl', 'Usiacurí');  -- DANE 08849
+  ('co-atl-usiacuri',          'co-atl', 'Usiacurí')  -- DANE 08849
 ON CONFLICT (id) DO NOTHING;
 
 -- DC · Bogotá, D.c. (DANE 11) — 1 municipios
 INSERT INTO public.municipality (id, department_id, name) VALUES
-  ('co-dc-bogota',  'co-dc', 'Bogotá, D.C.');  -- DANE 11001
+  ('co-dc-bogota',  'co-dc', 'Bogotá, D.C.')  -- DANE 11001
 ON CONFLICT (id) DO NOTHING;
 
 -- BOL · Bolívar (DANE 13) — 46 municipios
@@ -232,7 +226,7 @@ INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-bol-turbaco',                'co-bol', 'Turbaco'),  -- DANE 13836
   ('co-bol-turbana',                'co-bol', 'Turbaná'),  -- DANE 13838
   ('co-bol-villanueva',             'co-bol', 'Villanueva'),  -- DANE 13873
-  ('co-bol-zambrano',               'co-bol', 'Zambrano');  -- DANE 13894
+  ('co-bol-zambrano',               'co-bol', 'Zambrano')  -- DANE 13894
 ON CONFLICT (id) DO NOTHING;
 
 -- BOY · Boyacá (DANE 15) — 123 municipios
@@ -359,7 +353,7 @@ INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-boy-umbita',                 'co-boy', 'Úmbita'),  -- DANE 15842
   ('co-boy-ventaquemada',           'co-boy', 'Ventaquemada'),  -- DANE 15861
   ('co-boy-viracacha',              'co-boy', 'Viracachá'),  -- DANE 15879
-  ('co-boy-zetaquira',              'co-boy', 'Zetaquira');  -- DANE 15897
+  ('co-boy-zetaquira',              'co-boy', 'Zetaquira')  -- DANE 15897
 ON CONFLICT (id) DO NOTHING;
 
 -- CAL · Caldas (DANE 17) — 27 municipios
@@ -390,7 +384,7 @@ INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-cal-supia',        'co-cal', 'Supía'),  -- DANE 17777
   ('co-cal-victoria',     'co-cal', 'Victoria'),  -- DANE 17867
   ('co-cal-villamaria',   'co-cal', 'Villamaría'),  -- DANE 17873
-  ('co-cal-viterbo',      'co-cal', 'Viterbo');  -- DANE 17877
+  ('co-cal-viterbo',      'co-cal', 'Viterbo')  -- DANE 17877
 ON CONFLICT (id) DO NOTHING;
 
 -- CAQ · Caquetá (DANE 18) — 16 municipios
@@ -410,7 +404,7 @@ INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-caq-san-vicente-del-caguan',  'co-caq', 'San Vicente del Caguán'),  -- DANE 18753
   ('co-caq-solano',                  'co-caq', 'Solano'),  -- DANE 18756
   ('co-caq-solita',                  'co-caq', 'Solita'),  -- DANE 18785
-  ('co-caq-valparaiso',              'co-caq', 'Valparaíso');  -- DANE 18860
+  ('co-caq-valparaiso',              'co-caq', 'Valparaíso')  -- DANE 18860
 ON CONFLICT (id) DO NOTHING;
 
 -- CAU · Cauca (DANE 19) — 42 municipios
@@ -456,7 +450,7 @@ INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-cau-timbiqui',                'co-cau', 'Timbiquí'),  -- DANE 19809
   ('co-cau-toribio',                 'co-cau', 'Toribío'),  -- DANE 19821
   ('co-cau-totoro',                  'co-cau', 'Totoró'),  -- DANE 19824
-  ('co-cau-villa-rica',              'co-cau', 'Villa Rica');  -- DANE 19845
+  ('co-cau-villa-rica',              'co-cau', 'Villa Rica')  -- DANE 19845
 ON CONFLICT (id) DO NOTHING;
 
 -- CES · Cesar (DANE 20) — 25 municipios
@@ -485,7 +479,7 @@ INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-ces-san-alberto',               'co-ces', 'San Alberto'),  -- DANE 20710
   ('co-ces-san-diego',                 'co-ces', 'San Diego'),  -- DANE 20750
   ('co-ces-san-martin',                'co-ces', 'San Martín'),  -- DANE 20770
-  ('co-ces-tamalameque',               'co-ces', 'Tamalameque');  -- DANE 20787
+  ('co-ces-tamalameque',               'co-ces', 'Tamalameque')  -- DANE 20787
 ON CONFLICT (id) DO NOTHING;
 
 -- COR · Córdoba (DANE 23) — 30 municipios
@@ -519,7 +513,7 @@ INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-cor-san-pelayo',                 'co-cor', 'San Pelayo'),  -- DANE 23686
   ('co-cor-tierralta',                  'co-cor', 'Tierralta'),  -- DANE 23807
   ('co-cor-tuchin',                     'co-cor', 'Tuchín'),  -- DANE 23815
-  ('co-cor-valencia',                   'co-cor', 'Valencia');  -- DANE 23855
+  ('co-cor-valencia',                   'co-cor', 'Valencia')  -- DANE 23855
 ON CONFLICT (id) DO NOTHING;
 
 -- CUN · Cundinamarca (DANE 25) — 116 municipios
@@ -639,7 +633,7 @@ INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-cun-viota',                        'co-cun', 'Viotá'),  -- DANE 25878
   ('co-cun-yacopi',                       'co-cun', 'Yacopí'),  -- DANE 25885
   ('co-cun-zipacon',                      'co-cun', 'Zipacón'),  -- DANE 25898
-  ('co-cun-zipaquira',                    'co-cun', 'Zipaquirá');  -- DANE 25899
+  ('co-cun-zipaquira',                    'co-cun', 'Zipaquirá')  -- DANE 25899
 ON CONFLICT (id) DO NOTHING;
 
 -- CHO · Chocó (DANE 27) — 31 municipios
@@ -674,7 +668,7 @@ INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-cho-sipi',                     'co-cho', 'Sipí'),  -- DANE 27745
   ('co-cho-tado',                     'co-cho', 'Tadó'),  -- DANE 27787
   ('co-cho-unguia',                   'co-cho', 'Unguía'),  -- DANE 27800
-  ('co-cho-union-panamericana',       'co-cho', 'Unión Panamericana');  -- DANE 27810
+  ('co-cho-union-panamericana',       'co-cho', 'Unión Panamericana')  -- DANE 27810
 ON CONFLICT (id) DO NOTHING;
 
 -- HUI · Huila (DANE 41) — 37 municipios
@@ -715,7 +709,7 @@ INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-hui-teruel',        'co-hui', 'Teruel'),  -- DANE 41801
   ('co-hui-timana',        'co-hui', 'Timaná'),  -- DANE 41807
   ('co-hui-villavieja',    'co-hui', 'Villavieja'),  -- DANE 41872
-  ('co-hui-yaguara',       'co-hui', 'Yaguará');  -- DANE 41885
+  ('co-hui-yaguara',       'co-hui', 'Yaguará')  -- DANE 41885
 ON CONFLICT (id) DO NOTHING;
 
 -- LAG · La Guajira (DANE 44) — 15 municipios
@@ -734,7 +728,7 @@ INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-lag-san-juan-del-cesar',  'co-lag', 'San Juan del Cesar'),  -- DANE 44650
   ('co-lag-uribia',              'co-lag', 'Uribia'),  -- DANE 44847
   ('co-lag-urumita',             'co-lag', 'Urumita'),  -- DANE 44855
-  ('co-lag-villanueva',          'co-lag', 'Villanueva');  -- DANE 44874
+  ('co-lag-villanueva',          'co-lag', 'Villanueva')  -- DANE 44874
 ON CONFLICT (id) DO NOTHING;
 
 -- MAG · Magdalena (DANE 47) — 30 municipios
@@ -768,7 +762,7 @@ INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-mag-sitionuevo',                   'co-mag', 'Sitionuevo'),  -- DANE 47745
   ('co-mag-tenerife',                     'co-mag', 'Tenerife'),  -- DANE 47798
   ('co-mag-zapayan',                      'co-mag', 'Zapayán'),  -- DANE 47960
-  ('co-mag-zona-bananera',                'co-mag', 'Zona Bananera');  -- DANE 47980
+  ('co-mag-zona-bananera',                'co-mag', 'Zona Bananera')  -- DANE 47980
 ON CONFLICT (id) DO NOTHING;
 
 -- MET · Meta (DANE 50) — 29 municipios
@@ -801,7 +795,7 @@ INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-met-san-juan-de-arama',     'co-met', 'San Juan de Arama'),  -- DANE 50683
   ('co-met-san-juanito',           'co-met', 'San Juanito'),  -- DANE 50686
   ('co-met-san-martin',            'co-met', 'San Martín'),  -- DANE 50689
-  ('co-met-vistahermosa',          'co-met', 'Vistahermosa');  -- DANE 50711
+  ('co-met-vistahermosa',          'co-met', 'Vistahermosa')  -- DANE 50711
 ON CONFLICT (id) DO NOTHING;
 
 -- NAR · Nariño (DANE 52) — 64 municipios
@@ -869,7 +863,7 @@ INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-nar-tangua',                'co-nar', 'Tangua'),  -- DANE 52788
   ('co-nar-san-andres-de-tumaco',  'co-nar', 'San Andrés de Tumaco'),  -- DANE 52835
   ('co-nar-tuquerres',             'co-nar', 'Túquerres'),  -- DANE 52838
-  ('co-nar-yacuanquer',            'co-nar', 'Yacuanquer');  -- DANE 52885
+  ('co-nar-yacuanquer',            'co-nar', 'Yacuanquer')  -- DANE 52885
 ON CONFLICT (id) DO NOTHING;
 
 -- NSA · Norte de Santander (DANE 54) — 40 municipios
@@ -913,7 +907,7 @@ INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-nsa-tibu',                'co-nsa', 'Tibú'),  -- DANE 54810
   ('co-nsa-toledo',              'co-nsa', 'Toledo'),  -- DANE 54820
   ('co-nsa-villa-caro',          'co-nsa', 'Villa Caro'),  -- DANE 54871
-  ('co-nsa-villa-del-rosario',   'co-nsa', 'Villa del Rosario');  -- DANE 54874
+  ('co-nsa-villa-del-rosario',   'co-nsa', 'Villa del Rosario')  -- DANE 54874
 ON CONFLICT (id) DO NOTHING;
 
 -- QUI · Quindío (DANE 63) — 12 municipios
@@ -929,7 +923,7 @@ INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-qui-montenegro',  'co-qui', 'Montenegro'),  -- DANE 63470
   ('co-qui-pijao',       'co-qui', 'Pijao'),  -- DANE 63548
   ('co-qui-quimbaya',    'co-qui', 'Quimbaya'),  -- DANE 63594
-  ('co-qui-salento',     'co-qui', 'Salento');  -- DANE 63690
+  ('co-qui-salento',     'co-qui', 'Salento')  -- DANE 63690
 ON CONFLICT (id) DO NOTHING;
 
 -- RIS · Risaralda (DANE 66) — 14 municipios
@@ -947,7 +941,7 @@ INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-ris-pueblo-rico',          'co-ris', 'Pueblo Rico'),  -- DANE 66572
   ('co-ris-quinchia',             'co-ris', 'Quinchía'),  -- DANE 66594
   ('co-ris-santa-rosa-de-cabal',  'co-ris', 'Santa Rosa de Cabal'),  -- DANE 66682
-  ('co-ris-santuario',            'co-ris', 'Santuario');  -- DANE 66687
+  ('co-ris-santuario',            'co-ris', 'Santuario')  -- DANE 66687
 ON CONFLICT (id) DO NOTHING;
 
 -- SAN · Santander (DANE 68) — 87 municipios
@@ -1038,7 +1032,7 @@ INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-san-velez',                   'co-san', 'Vélez'),  -- DANE 68861
   ('co-san-vetas',                   'co-san', 'Vetas'),  -- DANE 68867
   ('co-san-villanueva',              'co-san', 'Villanueva'),  -- DANE 68872
-  ('co-san-zapatoca',                'co-san', 'Zapatoca');  -- DANE 68895
+  ('co-san-zapatoca',                'co-san', 'Zapatoca')  -- DANE 68895
 ON CONFLICT (id) DO NOTHING;
 
 -- SUC · Sucre (DANE 70) — 26 municipios
@@ -1068,7 +1062,7 @@ INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-suc-san-luis-de-since',      'co-suc', 'San Luis de Sincé'),  -- DANE 70742
   ('co-suc-sucre',                  'co-suc', 'Sucre'),  -- DANE 70771
   ('co-suc-santiago-de-tolu',       'co-suc', 'Santiago de Tolú'),  -- DANE 70820
-  ('co-suc-san-jose-de-toluviejo',  'co-suc', 'San José de Toluviejo');  -- DANE 70823
+  ('co-suc-san-jose-de-toluviejo',  'co-suc', 'San José de Toluviejo')  -- DANE 70823
 ON CONFLICT (id) DO NOTHING;
 
 -- TOL · Tolima (DANE 73) — 47 municipios
@@ -1119,7 +1113,7 @@ INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-tol-valle-de-san-juan',           'co-tol', 'Valle de San Juan'),  -- DANE 73854
   ('co-tol-venadillo',                   'co-tol', 'Venadillo'),  -- DANE 73861
   ('co-tol-villahermosa',                'co-tol', 'Villahermosa'),  -- DANE 73870
-  ('co-tol-villarrica',                  'co-tol', 'Villarrica');  -- DANE 73873
+  ('co-tol-villarrica',                  'co-tol', 'Villarrica')  -- DANE 73873
 ON CONFLICT (id) DO NOTHING;
 
 -- VAC · Valle del Cauca (DANE 76) — 42 municipios
@@ -1165,7 +1159,7 @@ INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-vac-vijes',                'co-vac', 'Vijes'),  -- DANE 76869
   ('co-vac-yotoco',               'co-vac', 'Yotoco'),  -- DANE 76890
   ('co-vac-yumbo',                'co-vac', 'Yumbo'),  -- DANE 76892
-  ('co-vac-zarzal',               'co-vac', 'Zarzal');  -- DANE 76895
+  ('co-vac-zarzal',               'co-vac', 'Zarzal')  -- DANE 76895
 ON CONFLICT (id) DO NOTHING;
 
 -- ARA · Arauca (DANE 81) — 7 municipios
@@ -1176,7 +1170,7 @@ INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-ara-fortul',         'co-ara', 'Fortul'),  -- DANE 81300
   ('co-ara-puerto-rondon',  'co-ara', 'Puerto Rondón'),  -- DANE 81591
   ('co-ara-saravena',       'co-ara', 'Saravena'),  -- DANE 81736
-  ('co-ara-tame',           'co-ara', 'Tame');  -- DANE 81794
+  ('co-ara-tame',           'co-ara', 'Tame')  -- DANE 81794
 ON CONFLICT (id) DO NOTHING;
 
 -- CAS · Casanare (DANE 85) — 19 municipios
@@ -1199,7 +1193,7 @@ INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-cas-tamara',                'co-cas', 'Támara'),  -- DANE 85400
   ('co-cas-tauramena',             'co-cas', 'Tauramena'),  -- DANE 85410
   ('co-cas-trinidad',              'co-cas', 'Trinidad'),  -- DANE 85430
-  ('co-cas-villanueva',            'co-cas', 'Villanueva');  -- DANE 85440
+  ('co-cas-villanueva',            'co-cas', 'Villanueva')  -- DANE 85440
 ON CONFLICT (id) DO NOTHING;
 
 -- PUT · Putumayo (DANE 86) — 13 municipios
@@ -1216,25 +1210,25 @@ INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-put-san-miguel',         'co-put', 'San Miguel'),  -- DANE 86757
   ('co-put-santiago',           'co-put', 'Santiago'),  -- DANE 86760
   ('co-put-valle-del-guamuez',  'co-put', 'Valle del Guamuez'),  -- DANE 86865
-  ('co-put-villagarzon',        'co-put', 'Villagarzón');  -- DANE 86885
+  ('co-put-villagarzon',        'co-put', 'Villagarzón')  -- DANE 86885
 ON CONFLICT (id) DO NOTHING;
 
 -- SAP · Archipiélago de San Andrés, Providencia y Santa Catalina (DANE 88) — 2 municipios
 INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-sap-san-andres',   'co-sap', 'San Andrés'),  -- DANE 88001
-  ('co-sap-providencia',  'co-sap', 'Providencia');  -- DANE 88564
+  ('co-sap-providencia',  'co-sap', 'Providencia')  -- DANE 88564
 ON CONFLICT (id) DO NOTHING;
 
 -- AMA · Amazonas (DANE 91) — 2 municipios
 INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-ama-leticia',        'co-ama', 'Leticia'),  -- DANE 91001
-  ('co-ama-puerto-narino',  'co-ama', 'Puerto Nariño');  -- DANE 91540
+  ('co-ama-puerto-narino',  'co-ama', 'Puerto Nariño')  -- DANE 91540
 ON CONFLICT (id) DO NOTHING;
 
 -- GUA · Guainía (DANE 94) — 2 municipios
 INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-gua-inirida',        'co-gua', 'Inírida'),  -- DANE 94001
-  ('co-gua-barrancominas',  'co-gua', 'Barrancominas');  -- DANE 94343
+  ('co-gua-barrancominas',  'co-gua', 'Barrancominas')  -- DANE 94343
 ON CONFLICT (id) DO NOTHING;
 
 -- GUV · Guaviare (DANE 95) — 4 municipios
@@ -1242,14 +1236,14 @@ INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-guv-san-jose-del-guaviare',  'co-guv', 'San José del Guaviare'),  -- DANE 95001
   ('co-guv-calamar',                'co-guv', 'Calamar'),  -- DANE 95015
   ('co-guv-el-retorno',             'co-guv', 'El Retorno'),  -- DANE 95025
-  ('co-guv-miraflores',             'co-guv', 'Miraflores');  -- DANE 95200
+  ('co-guv-miraflores',             'co-guv', 'Miraflores')  -- DANE 95200
 ON CONFLICT (id) DO NOTHING;
 
 -- VAU · Vaupés (DANE 97) — 3 municipios
 INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-vau-mitu',     'co-vau', 'Mitú'),  -- DANE 97001
   ('co-vau-caruru',   'co-vau', 'Carurú'),  -- DANE 97161
-  ('co-vau-taraira',  'co-vau', 'Taraira');  -- DANE 97666
+  ('co-vau-taraira',  'co-vau', 'Taraira')  -- DANE 97666
 ON CONFLICT (id) DO NOTHING;
 
 -- VID · Vichada (DANE 99) — 4 municipios
@@ -1257,7 +1251,7 @@ INSERT INTO public.municipality (id, department_id, name) VALUES
   ('co-vid-puerto-carreno',  'co-vid', 'Puerto Carreño'),  -- DANE 99001
   ('co-vid-la-primavera',    'co-vid', 'La Primavera'),  -- DANE 99524
   ('co-vid-santa-rosalia',   'co-vid', 'Santa Rosalía'),  -- DANE 99624
-  ('co-vid-cumaribo',        'co-vid', 'Cumaribo');  -- DANE 99773
+  ('co-vid-cumaribo',        'co-vid', 'Cumaribo')  -- DANE 99773
 ON CONFLICT (id) DO NOTHING;
 
 COMMIT;
@@ -1269,6 +1263,4 @@ COMMIT;
 --    GROUP BY department_id ORDER BY department_id;                 -- 33 filas
 --   SELECT id, name FROM public.municipality WHERE id IN
 --     ('co-atl-barranquilla','co-sap-san-andres','co-dc-bogota');
--- Poblar geom (posterior, via import OSM de limites admin):
---   UPDATE public.municipality m SET geom = o.geom FROM osm_admin o WHERE ...;
 -- =====================================================================================

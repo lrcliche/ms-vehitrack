@@ -20,7 +20,7 @@
 #>
 [CmdletBinding()]
 param(
-  [Parameter(Mandatory=$true)][string]$Gpkg,
+  [string]$Gpkg = (Join-Path $PSScriptRoot "..\data\municipios_co.gpkg"),
   [string]$Layer = "",
   [string]$Dsn   = "",
   [string]$CdpmpCol = "mpio_cdpmp",   # campo DIVIPOLA en el MGN (ajusta si tu version difiere)
@@ -53,6 +53,10 @@ if ([string]::IsNullOrWhiteSpace($Dsn)) { throw "DSN vacio." }
 
 if (-not (Test-Path $Gpkg)) { throw "No existe el GeoPackage: $Gpkg" }
 $Gpkg = (Resolve-Path $Gpkg).Path
+
+# ogr2ogr (PGDump) y los .sql se escriben en UTF-8, pero psql en Windows asume el encoding
+# de la consola (WIN1252/cp1252) y falla al leer los acentos. Forzamos cliente UTF-8.
+$env:PGCLIENTENCODING = "UTF8"
 
 # El GDAL que trae PostgreSQL no incluye el driver PostgreSQL en vivo, pero si PGDUMP:
 # ogr2ogr escribe el staging como .sql y psql lo carga. psql acepta el DSN uri tal cual.
