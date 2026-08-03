@@ -44,12 +44,14 @@ func (f *fakeStore) DictionaryDelta(context.Context, *int) (json.RawMessage, err
 }
 
 type fakeProvider struct {
-	results []entities.ProviderPlace
-	called  int
+	results   []entities.ProviderPlace
+	called    int
+	lastQuery string
 }
 
-func (p *fakeProvider) Search(context.Context, string, string, int) ([]entities.ProviderPlace, error) {
+func (p *fakeProvider) Search(_ context.Context, query, _ string, _ int) ([]entities.ProviderPlace, error) {
 	p.called++
+	p.lastQuery = query
 	return p.results, nil
 }
 func (p *fakeProvider) Reverse(context.Context, float64, float64) (*entities.ProviderPlace, error) {
@@ -100,6 +102,23 @@ func TestSearch_FallbackToProvider_Persists(t *testing.T) {
 	}
 	if res[0].Resolver != "nominatim" {
 		t.Fatalf("resolver = %s, quiero nominatim", res[0].Resolver)
+	}
+}
+
+func TestSearch_NormalizesQueryBeforeProvider(t *testing.T) {
+	// fakeStore.Normalize devuelve "carrera 15" siempre: el fallback debe mandarle a Nominatim
+	// la forma normalizada, no la cruda "cra 15", para que resuelva la nomenclatura colombiana.
+	store := &fakeStore{searchResults: nil}
+	prov := &fakeProvider{results: []entities.ProviderPlace{
+		{Label: "Carrera 15", Lat: 10.9, Lon: -74.8},
+	}}
+	svc := NewService(store, prov)
+
+	if _, err := svc.Search(context.Background(), "dev-1", "cra 15", "", nil, nil, 8); err != nil {
+		t.Fatal(err)
+	}
+	if prov.lastQuery != "carrera 15" {
+		t.Fatalf("Nominatim debe recibir la query normalizada, recibió %q", prov.lastQuery)
 	}
 }
 

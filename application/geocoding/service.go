@@ -59,12 +59,20 @@ func (s *Service) Search(
 		return results, nil
 	}
 
-	// 0 filas locales -> Nominatim.
+	// 0 filas locales -> Nominatim. Se normaliza la query ANTES del proveedor: Nominatim no
+	// entiende la nomenclatura colombiana cruda (cra/kra/#/apto), así que sin esto el fallback
+	// devuelve 0 para direcciones tipo "cra 48 # 76-147". El geocoder local ya normaliza dentro
+	// de fnc_search_place; aquí se replica para el path externo. Best-effort: si Normalize
+	// falla, se usa la query original.
 	if s.provider != nil {
-		providerResults, perr := s.provider.Search(ctx, query, "", limit)
+		providerQuery := query
+		if norm, nerr := s.store.Normalize(ctx, query); nerr == nil && norm != "" {
+			providerQuery = norm
+		}
+		providerResults, perr := s.provider.Search(ctx, providerQuery, "", limit)
 		if perr == nil && len(providerResults) > 0 {
 			p := providerResults[0]
-			raw, rerr := s.store.ResolveFromProvider(ctx, deviceID, query, municipalityID, p)
+			raw, rerr := s.store.ResolveFromProvider(ctx, deviceID, providerQuery, municipalityID, p)
 			if rerr != nil {
 				return nil, rerr
 			}
