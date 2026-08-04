@@ -10,14 +10,14 @@ import (
 	"ms-vehitrack/application/geocoding"
 	"ms-vehitrack/application/packages"
 	"ms-vehitrack/application/routing"
+	"ms-vehitrack/application/services"
 	"ms-vehitrack/application/tracking"
 	"ms-vehitrack/application/trafficquery"
-	"ms-vehitrack/application/userdata"
-	"ms-vehitrack/application/services"
 	"ms-vehitrack/application/usecases"
+	"ms-vehitrack/application/userdata"
 	"ms-vehitrack/domain/ports"
-	"ms-vehitrack/infrastructure/database"
 	"ms-vehitrack/infrastructure/cache"
+	"ms-vehitrack/infrastructure/database"
 	gcpbigquery "ms-vehitrack/infrastructure/gcp/bigquery"
 	gcpconfig "ms-vehitrack/infrastructure/gcp/config"
 	gcppubsub "ms-vehitrack/infrastructure/gcp/pubsub"
@@ -28,6 +28,7 @@ import (
 	"ms-vehitrack/infrastructure/repositories"
 	"ms-vehitrack/infrastructure/stores"
 	"ms-vehitrack/infrastructure/tenant"
+	trafficsrc "ms-vehitrack/infrastructure/traffic"
 	"ms-vehitrack/presentation/handlers"
 )
 
@@ -266,6 +267,13 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 	if dbPool != nil {
 		routingStore := repositories.NewPostgresRoutingStore(dbPool)
 		routingService = routing.NewService(routingStore, osrm.NewEngine(osrmClient))
+		// Arranque TomTom: si hay key, el ETA de rutas se rellena desde TomTom Flow para las
+		// rutas sin señal colaborativa. Sin key, el ETA se queda en crowd/flujo libre.
+		if cfg.TomTomAPIKey != "" {
+			routingService = routingService.WithTrafficETA(
+				trafficsrc.NewTomTomETA(cfg.TomTomAPIKey, cfg.TrafficBaseURL, nil))
+			log.Printf("[CONTAINER] operation=routing-eta source=tomtom status=enabled")
+		}
 		log.Printf("[CONTAINER] operation=routing status=enabled")
 	} else {
 		log.Printf("[CONTAINER] operation=routing status=disabled")

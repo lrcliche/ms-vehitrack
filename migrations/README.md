@@ -14,11 +14,15 @@ psql "$POSTGRES_DSN" -f migrations/002_geocoding.sql          # geocoder CO + di
 psql "$POSTGRES_DSN" -f migrations/003_device_data.sql        # favoritos, POI, geocercas, motor de sync
 psql "$POSTGRES_DSN" -f migrations/004_routing_offline_ops.sql# cache de rutas, paquetes offline, log de API, mantenimiento
 psql "$POSTGRES_DSN" -f migrations/005_legacy_traffic_gcp.sql # DDL del path GCP heredado (trafico plano)
+psql "$POSTGRES_DSN" -f migrations/006_app_grants.sql        # grants DML/EXECUTE del rol de la app (vehitrack_app)
+psql "$POSTGRES_DSN" -f migrations/007_routing_traffic_eta.sql# ETA con trafico vivo en POST /routes (duration_in_traffic)
+psql "$POSTGRES_DSN" -f migrations/008_routing_alternatives.sql# alternativas reales: fnc_get_route devuelve routes[]
 ```
 
 Las `001`–`004` son el paquete geoespacial canónico. La `005` formaliza las tablas planas
 `traffic_batches/samples/aggregates` que el repositorio Go (`postgres_traffic_store.go`) ya
-usaba sin DDL versionado.
+usaba sin DDL versionado. La `006` consolida los grants del rol de la app. La `007` añade el
+ETA ajustado a tráfico vivo (`traffic.fnc_route_eta` + `routing.fnc_get_route`) sin tocar tablas.
 
 ## Prerrequisito: roles PostgreSQL
 

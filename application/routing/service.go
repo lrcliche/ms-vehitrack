@@ -19,6 +19,10 @@ type RouteComputation struct {
 	DurationS int
 	Geometry  json.RawMessage // GeoJSON LineString
 	Steps     json.RawMessage // maniobras crudas (legs/steps de OSRM)
+	// Alternatives = rutas alternas (jsonb array de {geojson,distance_m,duration_s,steps}),
+	// o nil si no hubo. Se persiste tal cual en routing.route_cache.alternatives; fnc_get_route
+	// las devuelve junto a la principal en el array `routes`.
+	Alternatives json.RawMessage
 }
 
 // RouteEngine es el motor de ruteo externo (OSRM), detras de una interfaz para no acoplar la
@@ -27,14 +31,30 @@ type RouteEngine interface {
 	Route(ctx context.Context, waypoints []entities.Waypoint, profile string) (*RouteComputation, error)
 }
 
+// TrafficETA ajusta la duracion de una ruta al trafico en vivo de una fuente EXTERNA (TomTom
+// Flow), como ARRANQUE mientras el trafico colaborativo (traffic.live_state) aun no cubre. Se
+// aplica solo a rutas SIN señal crowd. geometryGeoJSON = LineString GeoJSON de la ruta;
+// devuelve (segundos ajustados, true) o (_, false) si no hay dato / no esta configurado.
+type TrafficETA interface {
+	AdjustedDuration(ctx context.Context, geometryGeoJSON json.RawMessage, freeFlowS float64) (float64, bool)
+}
+
 // Service implementa la cascada de ruteo sobre el store PG y el motor OSRM.
 type Service struct {
 	store  ports.RoutingStore
 	engine RouteEngine
+	eta    TrafficETA // opcional (arranque TomTom); nil = solo crowd/flujo libre.
 }
 
 func NewService(store ports.RoutingStore, engine RouteEngine) *Service {
 	return &Service{store: store, engine: engine}
+}
+
+// WithTrafficETA enchufa una fuente externa de ETA (TomTom) como arranque. Devuelve el mismo
+// Service para encadenar en el arranque. Sin llamarlo, el ETA se queda en crowd/flujo libre.
+func (s *Service) WithTrafficETA(eta TrafficETA) *Service {
+	s.eta = eta
+	return s
 }
 
 // Route resuelve POST /routes. Devuelve (ruta jsonb, cacheHit, error). profile vacio -> 'car'.
@@ -53,7 +73,9 @@ func (s *Service) Route(
 	if len(waypoints) < 2 {
 		return nil, false, entities.ErrTooFewWaypoints
 	}
-	if profile == "" {
+	// La app manda profile 'driving' (nombre OSRM); el unico route_profile del modelo es
+	// 'car'. Se normaliza aqui para no chocar con VT061 (perfil invalido) en prc_store_route.
+	if profile == "" || profile == "driving" {
 		profile = "car"
 	}
 
@@ -76,7 +98,7 @@ func (s *Service) Route(
 		if err := s.store.RecordHit(ctx, tenantID, deviceID, meta.RouteCacheID); err != nil {
 			return nil, false, err
 		}
-		return cached, true, nil
+		return s.enrich(ctx, cached), true, nil
 	}
 
 	comp, err := s.engine.Route(ctx, waypoints, profile)
@@ -84,9 +106,74 @@ func (s *Service) Route(
 		return nil, false, err
 	}
 	stored, err := s.store.StoreRoute(ctx, tenantID, deviceID, wpJSON,
-		comp.Geometry, comp.DistanceM, comp.DurationS, profile, comp.Steps, nil)
+		comp.Geometry, comp.DistanceM, comp.DurationS, profile, comp.Steps, comp.Alternatives)
 	if err != nil {
 		return nil, false, err
 	}
-	return stored, false, nil
+	return s.enrich(ctx, stored), false, nil
+}
+
+// enrich rellena duration_in_traffic_s con la fuente externa (TomTom) en las rutas que NO
+// tienen señal colaborativa (ETA == flujo libre). Respeta el dato crowd cuando existe (ETA >
+// flujo libre): el trafico propio manda sobre el de arranque. Sin `eta` configurada, o ante
+// cualquier fallo de parseo, devuelve el jsonb intacto — nunca degrada la respuesta.
+func (s *Service) enrich(ctx context.Context, raw json.RawMessage) json.RawMessage {
+	if s.eta == nil || len(raw) == 0 {
+		return raw
+	}
+	var doc map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return raw
+	}
+	routesRaw, ok := doc["routes"]
+	if !ok {
+		return raw
+	}
+	var routes []map[string]json.RawMessage
+	if err := json.Unmarshal(routesRaw, &routes); err != nil || len(routes) == 0 {
+		return raw
+	}
+
+	changed := false
+	for _, r := range routes {
+		var freeFlow float64
+		if err := json.Unmarshal(r["duration_s"], &freeFlow); err != nil || freeFlow <= 0 {
+			continue
+		}
+		// ¿ya hay señal crowd? (ETA > flujo libre). Si la hay, no se pisa con TomTom.
+		if v, present := r["duration_in_traffic_s"]; present {
+			var dit float64
+			if json.Unmarshal(v, &dit) == nil && dit > freeFlow+1 {
+				continue
+			}
+		}
+		geo := r["geojson"]
+		if len(geo) == 0 {
+			continue
+		}
+		adj, applied := s.eta.AdjustedDuration(ctx, geo, freeFlow)
+		if !applied {
+			continue
+		}
+		b, err := json.Marshal(int(adj + 0.5))
+		if err != nil {
+			continue
+		}
+		r["duration_in_traffic_s"] = b
+		changed = true
+	}
+	if !changed {
+		return raw
+	}
+
+	nr, err := json.Marshal(routes)
+	if err != nil {
+		return raw
+	}
+	doc["routes"] = nr
+	out, err := json.Marshal(doc)
+	if err != nil {
+		return raw
+	}
+	return out
 }

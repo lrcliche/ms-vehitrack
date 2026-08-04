@@ -30,8 +30,13 @@ type Config struct {
 	TrafficCacheTTLSeconds   int
 	TrafficMinSamples        int
 	TrafficMinDevices        int
-	TelemetryMaxAgeSeconds   int
-	TelemetryMaxSkewSeconds  int
+	// TomTom Flow como fuente de ARRANQUE del ETA de rutas mientras el tráfico colaborativo
+	// (traffic.live_state) aún no cubre. Vacío => desactivado (ETA = crowd o flujo libre).
+	// TrafficBaseURL permite un proxy propio que replique el contrato flowSegmentData.
+	TomTomAPIKey            string
+	TrafficBaseURL          string
+	TelemetryMaxAgeSeconds  int
+	TelemetryMaxSkewSeconds int
 	// Geo (modelo PG multi-tenant)
 	NominatimURL          string
 	OSRMURL               string
@@ -68,6 +73,8 @@ func MustLoad() Config {
 		TrafficCacheTTLSeconds:   getEnvAsInt("TRAFFIC_CACHE_TTL_SECONDS", 600),
 		TrafficMinSamples:        getEnvAsInt("TRAFFIC_MIN_SAMPLES", 5),
 		TrafficMinDevices:        getEnvAsInt("TRAFFIC_MIN_DEVICES", 3),
+		TomTomAPIKey:             os.Getenv("TOMTOM_API_KEY"),
+		TrafficBaseURL:           getEnv("TRAFFIC_BASE_URL", "https://api.tomtom.com"),
 		TelemetryMaxAgeSeconds:   getEnvAsInt("TELEMETRY_MAX_AGE_SECONDS", 86400),
 		TelemetryMaxSkewSeconds:  getEnvAsInt("TELEMETRY_MAX_SKEW_SECONDS", 300),
 		NominatimURL:             getEnv("NOMINATIM_URL", "http://127.0.0.1:21001"),
