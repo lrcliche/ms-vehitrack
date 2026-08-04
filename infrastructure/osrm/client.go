@@ -49,8 +49,25 @@ type routeResponse struct {
 	Routes  []Route `json:"routes"`
 }
 
-// Route calcula una ruta por los waypoints. profile default "driving" (perfil car de OSRM).
+// Route calcula UNA ruta por los waypoints (la primera de OSRM). profile default "driving".
 func (c *Client) Route(ctx context.Context, wps []Waypoint, profile string) (*Route, error) {
+	routes, err := c.routes(ctx, wps, profile, false)
+	if err != nil {
+		return nil, err
+	}
+	return &routes[0], nil
+}
+
+// RouteAll calcula la ruta y sus ALTERNATIVAS (alternatives=3). Devuelve todas las rutas que
+// dio OSRM en orden (la [0] es la principal). OSRM solo alterna punto a punto (2 waypoints);
+// con vias intermedias devuelve una sola, y aqui se devuelve esa sola sin error.
+func (c *Client) RouteAll(ctx context.Context, wps []Waypoint, profile string) ([]Route, error) {
+	return c.routes(ctx, wps, profile, true)
+}
+
+func (c *Client) routes(
+	ctx context.Context, wps []Waypoint, profile string, alternatives bool,
+) ([]Route, error) {
 	if len(wps) < 2 {
 		return nil, fmt.Errorf("osrm: se requieren al menos 2 waypoints")
 	}
@@ -68,7 +85,12 @@ func (c *Client) Route(ctx context.Context, wps []Waypoint, profile string) (*Ro
 	q.Set("overview", "full")
 	q.Set("geometries", "geojson")
 	q.Set("steps", "true")
-	q.Set("alternatives", "false")
+	// alternatives=3 pide hasta 3 rutas (OSRM puede devolver menos). "false" = solo la principal.
+	if alternatives {
+		q.Set("alternatives", "3")
+	} else {
+		q.Set("alternatives", "false")
+	}
 
 	path := "/route/v1/" + profile + "/" + strings.Join(coords, ";") + "?" + q.Encode()
 
@@ -92,5 +114,5 @@ func (c *Client) Route(ctx context.Context, wps []Waypoint, profile string) (*Ro
 	if out.Code != "Ok" || len(out.Routes) == 0 {
 		return nil, fmt.Errorf("osrm: sin ruta (code=%s)", out.Code)
 	}
-	return &out.Routes[0], nil
+	return out.Routes, nil
 }

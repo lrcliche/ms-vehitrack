@@ -63,8 +63,17 @@ func (h *RoutingHandler) Route(c *gin.Context) {
 		responses.ErrorFromApp(c, presentationerrors.Map(err))
 		return
 	}
-	responses.Success(c, http.StatusOK, gin.H{
+
+	// Se re-mapea el jsonb del modelo PG (routes[] con geojson/distance_m/duration_s/
+	// duration_in_traffic_s) al contrato de la app (geometry/distance/duration/
+	// duration_in_traffic) y se expone como lista `routes` = principal + alternativas (la app
+	// lee `data.routes[]`). `route` se conserva crudo por compatibilidad.
+	body := gin.H{
 		"cacheHit": cacheHit,
 		"route":    json.RawMessage(raw),
-	})
+	}
+	if views, mapped := dto.RouteViewsFromStored(json.RawMessage(raw)); mapped {
+		body["routes"] = views
+	}
+	responses.Success(c, http.StatusOK, body)
 }
