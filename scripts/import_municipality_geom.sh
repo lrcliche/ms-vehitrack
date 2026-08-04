@@ -26,6 +26,10 @@ SRC="${1:?Pasa la ruta al shapefile/gpkg de municipios del MGN}"
 DSN="${POSTGRES_DSN:?Exporta POSTGRES_DSN con el rol dueno (no vehitrack_app)}"
 STG="stg_mgn_municipio"
 
+# ogr2ogr y los .sql van en UTF-8; en Windows psql puede asumir el encoding de consola
+# (WIN1252) y fallar con los acentos. Forzamos cliente UTF-8.
+export PGCLIENTENCODING=UTF8
+
 # NOTA de campos: en el MGN 2023 la capa de municipios trae el codigo DIVIPOLA en
 # MPIO_CDPMP (5 chars) y el nombre en MPIO_CNMBR. ogr2ogr baja los nombres a minuscula
 # al cargar a PostGIS -> mpio_cdpmp. Confirma con:  ogrinfo -so -al "$SRC"

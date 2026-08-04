@@ -14,6 +14,7 @@
 -- =====================================================================================
 
 BEGIN;
+SET client_encoding TO 'UTF8';
 
 ALTER TABLE public.municipality ADD COLUMN IF NOT EXISTS divipola char(5);
 COMMENT ON COLUMN public.municipality.divipola IS
