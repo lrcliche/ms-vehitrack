@@ -19,6 +19,11 @@ type TrafficStorePort interface {
 	// RefreshAggregates recomputes aggregates for cells (or all recent if empty)
 	// within the lookback window.
 	RefreshAggregates(ctx context.Context, cells []string, lookbackMinutes int) error
+	// RecomputeFreeFlow recalcula la velocidad de flujo libre (p85 nocturno) de
+	// cada link sobre los ultimos lookbackDays. Es prerequisito para que el ETA
+	// con trafico crowd produzca factor: sin free_flow, fnc_route_eta cae a flujo
+	// libre. Antes solo lo corria un cron externo; ahora el servicio lo agenda.
+	RecomputeFreeFlow(ctx context.Context, lookbackDays int) error
 	// AggregatesByCorridor returns rows for corridor+slot (may be empty).
 	AggregatesByCorridor(ctx context.Context, corridor string, slot int) ([]entities.TrafficAggregate, error)
 }
