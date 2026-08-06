@@ -211,6 +211,10 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 		aggCtx, cancel := context.WithCancel(context.Background())
 		aggStop = cancel
 		go runAggregateJob(aggCtx, trafficStore)
+		// Job de flujo libre: prerequisito para que el ETA con trafico crowd
+		// produzca factor (sin free_flow, fnc_route_eta cae a flujo libre). Antes
+		// solo lo corria un cron externo; ahora se agenda aqui.
+		go runFreeFlowJob(aggCtx, trafficStore)
 	}
 
 	// Clientes geo (sin conexión en construcción: solo envuelven un http.Client con base URL).
@@ -340,6 +344,31 @@ func runAggregateJob(ctx context.Context, store ports.TrafficStorePort) {
 			} else {
 				log.Printf("[TRAFFIC] operation=refresh-aggregates status=ok")
 			}
+		}
+	}
+}
+
+// runFreeFlowJob recalcula el flujo libre (p85 nocturno, 28 dias) al arrancar y
+// luego cada 12 h. Es lo que faltaba: sin free_flow poblado, el ETA con trafico
+// crowd nunca produce factor (fnc_route_eta exige free_flow_speed_kmh NOT NULL).
+// Idempotente; corre en su propia goroutine y no bloquea el arranque.
+func runFreeFlowJob(ctx context.Context, store ports.TrafficStorePort) {
+	run := func() {
+		if err := store.RecomputeFreeFlow(ctx, 28); err != nil {
+			log.Printf("[TRAFFIC] operation=recompute-free-flow error=%v", err)
+		} else {
+			log.Printf("[TRAFFIC] operation=recompute-free-flow status=ok")
+		}
+	}
+	run() // una vez al arrancar, para poblar free_flow pronto tras el deploy
+	ticker := time.NewTicker(12 * time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			run()
 		}
 	}
 }

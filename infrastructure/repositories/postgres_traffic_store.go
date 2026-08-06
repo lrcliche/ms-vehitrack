@@ -170,6 +170,24 @@ func (s *PostgresTrafficStore) RefreshAggregates(
 	return nil
 }
 
+func (s *PostgresTrafficStore) RecomputeFreeFlow(
+	ctx context.Context,
+	lookbackDays int,
+) error {
+	days := lookbackDays
+	if days <= 0 {
+		days = 28
+	}
+	// prc_recompute_free_flow(p_days int, INOUT p_result jsonb): recalcula el p85
+	// nocturno por link. Sin transaccion explicita (una sola llamada idempotente).
+	if _, err := s.pool.Exec(
+		ctx, `CALL traffic.prc_recompute_free_flow($1::int, NULL)`, days,
+	); err != nil {
+		return fmt.Errorf("%w: prc_recompute_free_flow: %v", ports.ErrTrafficStoreFailed, err)
+	}
+	return nil
+}
+
 func (s *PostgresTrafficStore) AggregatesByCorridor(
 	ctx context.Context,
 	corridor string,
