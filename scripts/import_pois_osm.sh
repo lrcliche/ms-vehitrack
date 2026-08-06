@@ -19,7 +19,14 @@ set -euo pipefail
 
 MID="${1:-co-atl-barranquilla}"
 DSN="${POSTGRES_DSN:?Exporta POSTGRES_DSN con el rol dueno (no vehitrack_app)}"
-OVERPASS="${OVERPASS_URL:-https://overpass-api.de/api/interpreter}"
+# Varios mirrors: el público (overpass-api.de) suele dar 504 (dispatcher saturado);
+# kumi.systems aguanta mejor. OVERPASS_URL, si se pasa, va primero.
+OVERPASS_MIRRORS=(
+  "${OVERPASS_URL:-}"
+  "https://overpass.kumi.systems/api/interpreter"
+  "https://overpass-api.de/api/interpreter"
+  "https://maps.mail.ru/osm/tools/overpass/api/interpreter"
+)
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -34,18 +41,17 @@ echo "   S=$S W=$W N=$N E=$E"
 
 echo ">> 2/5  Overpass: POIs con nombre en el bbox"
 # nwr = node+way+relation. 'out center' da el centroide de ways/relations.
-Q="[out:json][timeout:240];
-(
-  nwr[\"name\"][\"amenity\"]($S,$W,$N,$E);
-  nwr[\"name\"][\"tourism\"]($S,$W,$N,$E);
-  nwr[\"name\"][\"leisure\"]($S,$W,$N,$E);
-  nwr[\"name\"][\"shop\"]($S,$W,$N,$E);
-  nwr[\"name\"][\"historic\"]($S,$W,$N,$E);
-  nwr[\"name\"][\"office\"]($S,$W,$N,$E);
-);
-out center;"
-curl -s --max-time 300 -G "$OVERPASS" --data-urlencode "data=$Q" -o "$WORK/osm.json"
-grep -q '"elements"' "$WORK/osm.json" || { echo "ERROR: respuesta Overpass invalida"; head -c 300 "$WORK/osm.json"; exit 1; }
+# En una sola línea (algunos mirrors se atragantan con saltos de línea).
+Q="[out:json][timeout:180];(nwr[\"name\"][\"amenity\"]($S,$W,$N,$E);nwr[\"name\"][\"tourism\"]($S,$W,$N,$E);nwr[\"name\"][\"leisure\"]($S,$W,$N,$E);nwr[\"name\"][\"shop\"]($S,$W,$N,$E);nwr[\"name\"][\"historic\"]($S,$W,$N,$E);nwr[\"name\"][\"office\"]($S,$W,$N,$E););out center;"
+OK=0
+for M in "${OVERPASS_MIRRORS[@]}"; do
+  [ -n "$M" ] || continue
+  echo "   probando $M"
+  curl -s --max-time 300 -G "$M" --data-urlencode "data=$Q" -o "$WORK/osm.json" || true
+  if grep -q '"elements"' "$WORK/osm.json" 2>/dev/null; then OK=1; break; fi
+  echo "   (mirror no respondió JSON, probando el siguiente)"
+done
+[ "$OK" = 1 ] || { echo "ERROR: ningun mirror de Overpass respondio JSON"; head -c 300 "$WORK/osm.json"; exit 1; }
 
 echo ">> 3/5  Overpass JSON -> GeoJSON de puntos"
 python3 - "$WORK/osm.json" "$WORK/pois.geojson" <<'PY'
