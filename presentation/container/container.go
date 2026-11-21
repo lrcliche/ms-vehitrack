@@ -9,6 +9,7 @@ import (
 	assignmentapp "ms-vehitrack/application/assignments"
 	"ms-vehitrack/application/businessauth"
 	"ms-vehitrack/application/config"
+	"ms-vehitrack/application/enterprise"
 	"ms-vehitrack/application/geocoding"
 	"ms-vehitrack/application/packages"
 	"ms-vehitrack/application/routing"
@@ -69,6 +70,7 @@ type Container struct {
 	routingService        *routing.Service
 	assignmentService     *assignmentapp.Service
 	serviceRequestService *servicerequests.Service
+	enterpriseService     *enterprise.Service
 	businessAuthService   *businessauth.Service
 	trackingService       *tracking.Service
 	trafficQueryService   *trafficquery.Service
@@ -305,6 +307,13 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 	} else {
 		log.Printf("[CONTAINER] operation=service-requests status=disabled")
 	}
+	var enterpriseService *enterprise.Service
+	if dbPool != nil {
+		enterpriseService = enterprise.NewService(repositories.NewPostgresEnterpriseStore(dbPool))
+		log.Printf("[CONTAINER] operation=enterprise-business status=enabled")
+	} else {
+		log.Printf("[CONTAINER] operation=enterprise-business status=disabled")
+	}
 
 	// F6 — Ingesta por lote + viajes + sesiones OBD: store PG (tracking.*/device.* tenant-scoped).
 	var trackingService *tracking.Service
@@ -360,6 +369,7 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 		routingService:          routingService,
 		assignmentService:       assignmentService,
 		serviceRequestService:   serviceRequestService,
+		enterpriseService:       enterpriseService,
 		trackingService:         trackingService,
 		trafficQueryService:     trafficQueryService,
 		businessAuthService:     businessAuthService,
@@ -568,6 +578,13 @@ func (c *Container) ResolveServiceRequestService() (*servicerequests.Service, bo
 		return nil, false
 	}
 	return c.serviceRequestService, true
+}
+
+func (c *Container) ResolveEnterpriseService() (*enterprise.Service, bool) {
+	if c.enterpriseService == nil {
+		return nil, false
+	}
+	return c.enterpriseService, true
 }
 
 func (c *Container) ResolveBusinessAuthService() (*businessauth.Service, bool) {

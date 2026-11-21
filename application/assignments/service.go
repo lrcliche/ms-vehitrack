@@ -4,6 +4,8 @@ import (
 	"context"
 	"math"
 	"sort"
+	"strings"
+	"time"
 
 	"ms-vehitrack/application/routing"
 	"ms-vehitrack/domain/entities"
@@ -51,6 +53,9 @@ type CostEstimate struct {
 	Scope              string   `json:"scope,omitempty"`
 	CostPerKMCOP       float64  `json:"cost_per_km_cop"`
 	DispatchCostCOP    float64  `json:"dispatch_cost_cop"`
+	DailyAllowanceCOP  float64  `json:"viatico_diario_cop"`
+	AllowanceDays      int      `json:"dias_viatico,omitempty"`
+	AllowanceTotalCOP  *float64 `json:"viatico_total_cop,omitempty"`
 	EmptyLegCOP        *float64 `json:"empty_leg_cop,omitempty"`
 	ServiceLegCOP      *float64 `json:"service_leg_cop,omitempty"`
 	EstimatedCostCOP   *float64 `json:"estimated_cost_cop,omitempty"`
@@ -58,13 +63,15 @@ type CostEstimate struct {
 }
 
 type Candidate struct {
-	Vehicle            entities.AssignmentVehicle `json:"vehicle"`
-	EmptyLeg           *LegEstimate               `json:"empty_leg"`
-	ServiceLeg         *LegEstimate               `json:"service_leg"`
-	TotalDistanceKM    *float64                   `json:"total_distance_km"`
-	CostEstimate       CostEstimate               `json:"cost_estimate"`
-	RoutingStatus      string                     `json:"routing_status"`
-	RoutingUnavailable string                     `json:"routing_unavailable_reason,omitempty"`
+	Vehicle             entities.AssignmentVehicle `json:"vehicle"`
+	EmptyLeg            *LegEstimate               `json:"empty_leg"`
+	ServiceLeg          *LegEstimate               `json:"service_leg"`
+	TotalDistanceKM     *float64                   `json:"total_distance_km"`
+	CostEstimate        CostEstimate               `json:"cost_estimate"`
+	Eligible            bool                       `json:"elegible"`
+	IneligibilityReason string                     `json:"motivo_inelegibilidad,omitempty"`
+	RoutingStatus       string                     `json:"routing_status"`
+	RoutingUnavailable  string                     `json:"routing_unavailable_reason,omitempty"`
 }
 
 type Result struct {
@@ -79,11 +86,14 @@ type RecommendationOption struct {
 	Driver              entities.AssignmentDriver  `json:"conductor"`
 	EmptyKM             *float64                   `json:"km_vacios"`
 	ServiceKM           *float64                   `json:"km_servicio"`
+	EstimatedDurationS  float64                    `json:"-"`
 	TotalEstimatedKM    *float64                   `json:"km_totales_estimados"`
 	EstimatedCostCOP    *float64                   `json:"costo_estimado"`
 	ProjectedMarginCOP  *float64                   `json:"margen_proyectado"`
 	MarginPercentage    *float64                   `json:"porcentaje_margen"`
 	Recommended         bool                       `json:"recomendado"`
+	Eligible            bool                       `json:"elegible"`
+	IneligibilityReason string                     `json:"motivo_inelegibilidad,omitempty"`
 	CriteriaExplanation string                     `json:"explicacion_criterios"`
 	RoutingStatus       string                     `json:"estado_ruta"`
 	RoutingUnavailable  string                     `json:"detalle_ruta,omitempty"`
@@ -92,6 +102,7 @@ type RecommendationOption struct {
 
 type RecommendationsResult struct {
 	ServiceRequestID string                 `json:"solicitud_id"`
+	ScheduledAt      time.Time              `json:"fecha_servicio"`
 	AgreedFareCOP    float64                `json:"tarifa_pactada"`
 	Alternatives     []RecommendationOption `json:"alternativas"`
 }
@@ -129,7 +140,15 @@ func (s *Service) Candidates(ctx context.Context, tenantID, actorUserID, tenantU
 	}
 
 	for _, vehicle := range vehicles {
-		candidate := Candidate{Vehicle: vehicle, ServiceLeg: serviceLeg, RoutingStatus: "ready"}
+		candidate := Candidate{Vehicle: vehicle, ServiceLeg: serviceLeg, RoutingStatus: "ready", Eligible: true}
+		if reason := driverIneligibility(vehicle.Driver, request.ScheduledAt); reason != "" {
+			candidate.Eligible = false
+			candidate.IneligibilityReason = reason
+			candidate.RoutingStatus = "ineligible"
+			candidate.CostEstimate = unavailableCost(vehicle, reason)
+			result.Candidates = append(result.Candidates, candidate)
+			continue
+		}
 		if vehicle.CurrentLocation == nil {
 			candidate.RoutingStatus = "incomplete"
 			candidate.RoutingUnavailable = "vehicle_location_not_available"
@@ -185,15 +204,18 @@ func (s *Service) Recommendations(ctx context.Context, tenantID, actorUserID, te
 			TotalEstimatedKM:   candidate.TotalDistanceKM,
 			EstimatedCostCOP:   candidate.CostEstimate.EstimatedCostCOP,
 			ProjectedMarginCOP: candidate.CostEstimate.EstimatedMarginCOP,
-			Recommended:        false, RoutingStatus: candidate.RoutingStatus,
+			Recommended:        false, Eligible: candidate.Eligible,
+			IneligibilityReason: candidate.IneligibilityReason, RoutingStatus: candidate.RoutingStatus,
 			RoutingUnavailable: candidate.RoutingUnavailable,
 			CostEstimate:       candidate.CostEstimate,
 		}
 		if candidate.EmptyLeg != nil {
 			option.EmptyKM = floatPointer(candidate.EmptyLeg.DistanceKM)
+			option.EstimatedDurationS += candidate.EmptyLeg.DurationS
 		}
 		if candidate.ServiceLeg != nil {
 			option.ServiceKM = floatPointer(candidate.ServiceLeg.DistanceKM)
+			option.EstimatedDurationS += candidate.ServiceLeg.DurationS
 		}
 		if candidate.CostEstimate.EstimatedMarginCOP != nil && result.ServiceRequest.AgreedFareCOP > 0 {
 			option.MarginPercentage = floatPointer(round(
@@ -205,6 +227,8 @@ func (s *Service) Recommendations(ctx context.Context, tenantID, actorUserID, te
 			}
 		}
 		switch {
+		case !candidate.Eligible:
+			option.CriteriaExplanation = "El conductor no tiene licencia vigente y completa para la fecha del servicio."
 		case candidate.RoutingUnavailable == "vehicle_location_not_available":
 			option.CriteriaExplanation = "No hay una ubicación telemétrica disponible para el vehículo."
 		case candidate.RoutingUnavailable == "pickup_coordinates_not_available":
@@ -242,15 +266,40 @@ func (s *Service) Recommendations(ctx context.Context, tenantID, actorUserID, te
 	})
 	return &RecommendationsResult{
 		ServiceRequestID: result.ServiceRequest.ID,
+		ScheduledAt:      parseScheduledAt(result.ServiceRequest.ScheduledAt),
 		AgreedFareCOP:    result.ServiceRequest.AgreedFareCOP,
 		Alternatives:     options,
 	}, nil
+}
+
+func (s *Service) Confirm(ctx context.Context, tenantID, actorUserID, tenantUserID string,
+	command entities.EnterpriseAssignmentCommand) (*entities.EnterpriseAssignmentResult, error) {
+	recommendations, err := s.Recommendations(ctx, tenantID, actorUserID, tenantUserID, command.RequestID)
+	if err != nil {
+		return nil, err
+	}
+	for _, option := range recommendations.Alternatives {
+		if option.VehicleID != command.VehicleID || option.Driver.ID != command.DriverID {
+			continue
+		}
+		if option.RoutingStatus != "ready" || option.EmptyKM == nil || option.ServiceKM == nil ||
+			option.EstimatedDurationS <= 0 || !option.CostEstimate.Available ||
+			!candidateEligible(option.Vehicle.Driver, recommendations.ScheduledAt) {
+			return nil, entities.ErrAssignmentCandidateUnavailable
+		}
+		command.EmptyKM = *option.EmptyKM
+		command.ServiceKM = *option.ServiceKM
+		command.EstimatedDurationS = option.EstimatedDurationS
+		return s.store.ConfirmAssignment(ctx, tenantID, actorUserID, tenantUserID, command)
+	}
+	return nil, entities.ErrAssignmentCandidateUnavailable
 }
 
 func estimateCost(vehicle entities.AssignmentVehicle, fare float64, empty, service *LegEstimate) CostEstimate {
 	estimate := CostEstimate{
 		Available: true, Currency: "COP", Scope: "empty_leg_only",
 		CostPerKMCOP: vehicle.CostPerKMCOP, DispatchCostCOP: vehicle.DispatchCostCOP,
+		DailyAllowanceCOP: vehicle.Driver.DailyAllowanceCOP,
 	}
 	if vehicle.CostPerKMCOP <= 0 {
 		return unavailableCost(vehicle, "vehicle_cost_per_km_not_configured")
@@ -261,7 +310,14 @@ func estimateCost(vehicle entities.AssignmentVehicle, fare float64, empty, servi
 		serviceCost := round(service.DistanceKM*vehicle.CostPerKMCOP, 2)
 		estimate.ServiceLegCOP = floatPointer(serviceCost)
 		estimate.Scope = "empty_and_service_legs"
-		total := round(emptyCost+serviceCost+vehicle.DispatchCostCOP, 2)
+		days := int(math.Ceil((empty.DurationS + service.DurationS) / 86400))
+		if days < 1 {
+			days = 1
+		}
+		allowance := round(vehicle.Driver.DailyAllowanceCOP*float64(days), 2)
+		estimate.AllowanceDays = days
+		estimate.AllowanceTotalCOP = floatPointer(allowance)
+		total := round(emptyCost+serviceCost+vehicle.DispatchCostCOP+allowance, 2)
 		estimate.EstimatedCostCOP = floatPointer(total)
 		estimate.EstimatedMarginCOP = floatPointer(round(fare-total, 2))
 		return estimate
@@ -292,3 +348,29 @@ func round(value float64, places int) float64 {
 }
 
 func floatPointer(value float64) *float64 { return &value }
+
+func parseScheduledAt(value string) time.Time {
+	parsed, _ := time.Parse(time.RFC3339, value)
+	return parsed
+}
+
+func licenseValidAt(expiresAt *string, scheduledAt time.Time) bool {
+	if expiresAt == nil || scheduledAt.IsZero() {
+		return false
+	}
+	expires, err := time.Parse("2006-01-02", *expiresAt)
+	return err == nil && !expires.Before(scheduledAt.UTC().Truncate(24*time.Hour))
+}
+
+func driverIneligibility(driver entities.AssignmentDriver, scheduledAt time.Time) string {
+	if !candidateEligible(driver, scheduledAt) {
+		return "license_not_valid_for_service_date"
+	}
+	return ""
+}
+
+func candidateEligible(driver entities.AssignmentDriver, scheduledAt time.Time) bool {
+	return driver.LicenseNumber != nil && strings.TrimSpace(*driver.LicenseNumber) != "" &&
+		driver.LicenseCategory != nil && strings.TrimSpace(*driver.LicenseCategory) != "" &&
+		licenseValidAt(driver.LicenseExpiresAt, scheduledAt)
+}
