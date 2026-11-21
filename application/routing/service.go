@@ -67,6 +67,30 @@ func (s *Service) Route(
 	if deviceID == "" {
 		return nil, false, entities.ErrDeviceIDRequired
 	}
+	return s.route(ctx, tenantID, deviceID, waypoints, profile, nil, "")
+}
+
+// RouteForUser is the token-authenticated enterprise route flow. It uses the same cache and
+// OSRM engine as Route while attributing route_request to the business user, not a device.
+func (s *Service) RouteForUser(
+	ctx context.Context, tenantID, userID, tenantUserID string,
+	waypoints []entities.Waypoint, profile string,
+) (json.RawMessage, bool, error) {
+	if userID == "" || tenantUserID == "" {
+		return nil, false, entities.ErrDeviceIDRequired
+	}
+	store, ok := s.store.(ports.BusinessRoutingStore)
+	if !ok {
+		return nil, false, entities.ErrBusinessRoutingUnavailable
+	}
+	return s.route(ctx, tenantID, userID, waypoints, profile, store, tenantUserID)
+}
+
+func (s *Service) route(
+	ctx context.Context, tenantID, actorID string,
+	waypoints []entities.Waypoint, profile string,
+	businessStore ports.BusinessRoutingStore, tenantUserID string,
+) (json.RawMessage, bool, error) {
 	if len(waypoints) == 0 {
 		return nil, false, entities.ErrWaypointsRequired
 	}
@@ -95,8 +119,14 @@ func (s *Service) Route(
 		if err := json.Unmarshal(cached, &meta); err != nil {
 			return nil, false, err
 		}
-		if err := s.store.RecordHit(ctx, tenantID, deviceID, meta.RouteCacheID); err != nil {
-			return nil, false, err
+		var recordErr error
+		if businessStore != nil {
+			recordErr = businessStore.RecordUserHit(ctx, tenantID, actorID, tenantUserID, meta.RouteCacheID)
+		} else {
+			recordErr = s.store.RecordHit(ctx, tenantID, actorID, meta.RouteCacheID)
+		}
+		if recordErr != nil {
+			return nil, false, recordErr
 		}
 		return s.enrich(ctx, cached), true, nil
 	}
@@ -105,8 +135,14 @@ func (s *Service) Route(
 	if err != nil {
 		return nil, false, err
 	}
-	stored, err := s.store.StoreRoute(ctx, tenantID, deviceID, wpJSON,
-		comp.Geometry, comp.DistanceM, comp.DurationS, profile, comp.Steps, comp.Alternatives)
+	var stored json.RawMessage
+	if businessStore != nil {
+		stored, err = businessStore.StoreUserRoute(ctx, tenantID, actorID, tenantUserID, wpJSON,
+			comp.Geometry, comp.DistanceM, comp.DurationS, profile, comp.Steps, comp.Alternatives)
+	} else {
+		stored, err = s.store.StoreRoute(ctx, tenantID, actorID, wpJSON,
+			comp.Geometry, comp.DistanceM, comp.DurationS, profile, comp.Steps, comp.Alternatives)
+	}
 	if err != nil {
 		return nil, false, err
 	}

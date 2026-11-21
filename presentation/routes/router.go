@@ -47,6 +47,7 @@ func New(appContainer *container.Container) *gin.Engine {
 	offlineHandler := handlers.NewOfflineHandler(appContainer)
 	userDataHandler := handlers.NewUserDataHandler(appContainer)
 	routingHandler := handlers.NewRoutingHandler(appContainer)
+	businessAuthHandler := handlers.NewBusinessAuthHandler(appContainer)
 	trackingHandler := handlers.NewTrackingHandler(appContainer)
 	trafficBBoxHandler := handlers.NewTrafficBBoxHandler(appContainer)
 
@@ -129,6 +130,20 @@ func New(appContainer *container.Container) *gin.Engine {
 		v1.POST("/devices/register",
 			middleware.IPRateLimit(cfg.RegisterRateRPS, cfg.RegisterRateBurst),
 			userDataHandler.Register)
+	}
+
+	// V2 empresarial: login emite el bearer token; todas las operaciones funcionales del grupo
+	// quedan bajo JWT. La autenticación de v1 no cambia.
+	v2 := engine.Group("/api/v2")
+	v2.Use(middleware.RateLimit(cfg.RateLimitRPS, cfg.RateLimitBurst))
+	{
+		v2.POST("/auth/login",
+			middleware.IPRateLimit(cfg.RegisterRateRPS, cfg.RegisterRateBurst), businessAuthHandler.Login)
+
+		protected := v2.Group("")
+		protected.Use(middleware.BusinessJWTAuth(cfg.JWTSigningKey, cfg.JWTIssuer))
+		protected.POST("/routes", routingHandler.RouteV2)
+		protected.POST("/auth/users", businessAuthHandler.CreateUser)
 	}
 
 	return engine

@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"ms-vehitrack/application/businessauth"
 	"ms-vehitrack/application/config"
 	"ms-vehitrack/application/geocoding"
 	"ms-vehitrack/application/packages"
@@ -64,6 +65,7 @@ type Container struct {
 
 	// F4/F6/F7: ruteo (cascada OSRM), ingesta+viajes+OBD, y lecturas de trafico por bbox.
 	routingService      *routing.Service
+	businessAuthService *businessauth.Service
 	trackingService     *tracking.Service
 	trafficQueryService *trafficquery.Service
 }
@@ -303,6 +305,15 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 		log.Printf("[CONTAINER] operation=traffic-query status=disabled")
 	}
 
+	var businessAuthService *businessauth.Service
+	if dbPool != nil {
+		businessAuthService = businessauth.NewService(
+			repositories.NewPostgresBusinessAuthStore(dbPool), cfg.JWTSigningKey, cfg.JWTIssuer)
+		log.Printf("[CONTAINER] operation=business-auth status=enabled")
+	} else {
+		log.Printf("[CONTAINER] operation=business-auth status=disabled")
+	}
+
 	return &Container{
 		config:                  cfg,
 		gcpConfig:               gcpCfg,
@@ -328,6 +339,7 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 		routingService:          routingService,
 		trackingService:         trackingService,
 		trafficQueryService:     trafficQueryService,
+		businessAuthService:     businessAuthService,
 	}, nil
 }
 
@@ -519,6 +531,13 @@ func (c *Container) ResolveRoutingService() (*routing.Service, bool) {
 		return nil, false
 	}
 	return c.routingService, true
+}
+
+func (c *Container) ResolveBusinessAuthService() (*businessauth.Service, bool) {
+	if c.businessAuthService == nil {
+		return nil, false
+	}
+	return c.businessAuthService, true
 }
 
 // ResolveTrackingService devuelve el servicio de ingesta por lote + viajes + OBD; false si

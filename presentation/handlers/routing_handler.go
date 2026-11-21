@@ -64,6 +64,39 @@ func (h *RoutingHandler) Route(c *gin.Context) {
 		return
 	}
 
+	h.writeRouteResponse(c, raw, cacheHit)
+}
+
+// RouteV2 acepta el mismo body del endpoint v1, autenticado con JWT de usuario empresarial.
+func (h *RoutingHandler) RouteV2(c *gin.Context) {
+	svc, ok := h.service(c)
+	if !ok {
+		return
+	}
+	claims, ok := middleware.BusinessClaimsFromContext(c)
+	if !ok {
+		responses.Error(c, http.StatusUnauthorized, "unauthorized", "valid business token required")
+		return
+	}
+	var req dto.RouteRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		responses.ErrorFromApp(c, presentationerrors.BadRequest("invalid route request"))
+		return
+	}
+	waypoints := make([]entities.Waypoint, len(req.Waypoints))
+	for i, w := range req.Waypoints {
+		waypoints[i] = entities.Waypoint{Lat: w.Lat, Lon: w.Lon}
+	}
+	raw, cacheHit, err := svc.RouteForUser(c.Request.Context(), claims.TenantID,
+		claims.Subject, claims.TenantUserID, waypoints, req.Profile)
+	if err != nil {
+		responses.ErrorFromApp(c, presentationerrors.Map(err))
+		return
+	}
+	h.writeRouteResponse(c, raw, cacheHit)
+}
+
+func (h *RoutingHandler) writeRouteResponse(c *gin.Context, raw json.RawMessage, cacheHit bool) {
 	// Se re-mapea el jsonb del modelo PG (routes[] con geojson/distance_m/duration_s/
 	// duration_in_traffic_s) al contrato de la app (geometry/distance/duration/
 	// duration_in_traffic) y se expone como lista `routes` = principal + alternativas (la app

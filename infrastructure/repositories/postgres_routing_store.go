@@ -61,6 +61,21 @@ func (s *PostgresRoutingStore) RecordHit(
 	return nil
 }
 
+func (s *PostgresRoutingStore) RecordUserHit(
+	ctx context.Context, tenantID, userID, tenantUserID string, routeCacheID int64,
+) error {
+	err := s.pool.WithTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx,
+			`CALL routing.prc_record_business_route_hit($1,$2,$3,$4)`,
+			tenantID, userID, tenantUserID, routeCacheID)
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("routing record business route hit: %w", err)
+	}
+	return nil
+}
+
 // StoreRoute = routing.prc_store_route (TENANT-SCOPED, INOUT p_result) + re-lectura de
 // routing.fnc_get_route dentro de la MISMA transaccion, para devolver la ruta ya normalizada
 // (route_cache_id, geojson, distance_m, duration_s, steps, expires_at). prc_store_route solo
@@ -84,6 +99,29 @@ func (s *PostgresRoutingStore) StoreRoute(
 	})
 	if err != nil {
 		return nil, fmt.Errorf("routing store_route: %w", err)
+	}
+	return out, nil
+}
+
+func (s *PostgresRoutingStore) StoreUserRoute(
+	ctx context.Context, tenantID, userID, tenantUserID string,
+	waypoints, geojson json.RawMessage, distanceM float64, durationS int,
+	profile string, steps, alternatives json.RawMessage,
+) (json.RawMessage, error) {
+	var out []byte
+	err := s.pool.WithTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx,
+			`CALL routing.prc_store_business_route($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+			tenantID, userID, tenantUserID, []byte(waypoints), []byte(geojson), distanceM, durationS, profile,
+			nullJSON(steps), nullJSON(alternatives), nil,
+		); err != nil {
+			return err
+		}
+		return tx.QueryRow(ctx,
+			`SELECT routing.fnc_get_route($1, $2)`, []byte(waypoints), profile).Scan(&out)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("routing store business route: %w", err)
 	}
 	return out, nil
 }
