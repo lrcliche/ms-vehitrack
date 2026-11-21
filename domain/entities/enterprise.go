@@ -72,6 +72,7 @@ type EnterpriseVehicleFilter struct {
 
 type EnterpriseDriver struct {
 	ID                   string                              `json:"id"`
+	UserLinked           bool                                `json:"usuario_vinculado"`
 	FullName             string                              `json:"nombre_completo"`
 	IdentificationNumber *string                             `json:"numero_identificacion,omitempty"`
 	Phone                *string                             `json:"telefono,omitempty"`
@@ -87,6 +88,7 @@ type EnterpriseDriver struct {
 
 type EnterpriseDriverCommand struct {
 	ID                   string
+	TenantUserID         *string
 	FullName             string
 	IdentificationNumber *string
 	Phone                *string

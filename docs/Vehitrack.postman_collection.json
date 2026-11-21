@@ -1,228 +1,1140 @@
 {
   "info": {
     "_postman_id": "0d6b8fa6-83e0-4fe0-b218-303fb07b701a",
-    "name": "Vehitrack",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "_exporter_id": "38999040"
+    "name": "VehiTrack API v2",
+    "description": "Colección para los endpoints v2 implementados de autenticación, rutas, operaciones empresariales y App Driver. Importa uno de los entornos incluidos y configura email, password y tenantId antes de iniciar sesión. El login guarda automáticamente data.access_token en token.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
   },
   "item": [
     {
-      "name": "login",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n    \"email\": \"despachador@empresa.com\",\n    \"password\": \"UnaClaveSeguraDe12+\",\n    \"tenant_id\": \"00000000-0000-0000-0000-000000000001\"\n}",
-          "options": {
-            "raw": {
-              "language": "json"
+      "name": "Autenticación",
+      "item": [
+        {
+          "name": "Iniciar sesión y guardar token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "auth",
+                "login"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"tenant_id\": \"{{tenantId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
-          }
+          },
+          "response": [],
+          "description": "No requiere token. Configura email, password y tenantId en el entorno. El script guarda data.access_token (o data.token) en la variable token.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "const token = body?.data?.access_token || body?.data?.token || body?.access_token || body?.token;",
+                  "if (token) pm.environment.set(\"token\", token);"
+                ]
+              }
+            }
+          ]
         },
-        "url": {
-          "raw": "{{baseUrl}}/api/v2/auth/login",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "api",
-            "v2",
-            "auth",
-            "login"
+        {
+          "name": "Crear usuario",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/auth/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "auth",
+                "users"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{newUserEmail}}\",\n  \"full_name\": \"{{newUserFullName}}\",\n  \"password\": \"{{newUserPassword}}\",\n  \"role_code\": \"{{roleCode}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "description": "Requiere bearer token y permiso para crear usuarios."
+        },
+        {
+          "name": "Crear usuario conductor para vincular",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/auth/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "auth",
+                "users"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{driverUserEmail}}\",\n  \"full_name\": \"{{driverUserFullName}}\",\n  \"password\": \"{{driverUserPassword}}\",\n  \"role_code\": \"driver\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "description": "Requiere permiso para crear usuarios y rol driver asignable. Guarda tenant_user_id en la variable tenantUserId para usarlo al crear o actualizar el conductor.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "const tenantUserId = body?.data?.tenant_user_id;",
+                  "if (tenantUserId) pm.environment.set(\"tenantUserId\", tenantUserId);"
+                ]
+              }
+            }
           ]
         }
-      },
-      "response": []
+      ]
     },
     {
-      "name": "geo-rutas",
-      "event": [
+      "name": "Rutas y asignación",
+      "item": [
         {
-          "listen": "prerequest",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "const baseUrl = pm.environment.get(\"baseUrl\");\n\nconst loginResponse = await pm.sendRequest({\n  url: baseUrl+\"/api/v2/auth/login\",\n  method: \"POST\",\n  header: {\n    \"Content-Type\": \"application/json\"\n  },\n  body: {\n    mode: \"raw\",\n    raw: JSON.stringify({\n      email: \"despachador@empresa.com\",\n      password: \"UnaClaveSeguraDe12+\",\n      tenant_id: \"00000000-0000-0000-0000-000000000001\"\n    })\n  }\n});\n\nif (loginResponse.code < 200 || loginResponse.code >= 300) {\n  throw new Error(`Login falló: ${loginResponse.code} ${loginResponse.text()}`);\n}\n\nconst loginData = loginResponse.json();\nconst token = loginData?.data?.access_token || loginData.token;\n\nif (!token) {\n  throw new Error(\"La respuesta del login no contiene access_token ni token\");\n}\n\npm.variables.set(\"tokenx\", token);"
-            ]
-          }
+          "name": "Calcular ruta",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/routes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "routes"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"waypoints\": [\n    {\n      \"lat\": 10.98,\n      \"lon\": -74.78\n    },\n    {\n      \"lat\": 10.39,\n      \"lon\": -75.47\n    }\n  ],\n  \"profile\": \"car\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "description": "Calcula ruta con puntos lat/lon y perfil car. Requiere token."
+        },
+        {
+          "name": "Candidatos de asignación por solicitud",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/service-requests/{{serviceRequestId}}/assignment-candidates",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "service-requests",
+                "{{serviceRequestId}}",
+                "assignment-candidates"
+              ]
+            }
+          },
+          "response": [],
+          "description": "Consulta candidatos para una solicitud existente."
+        }
+      ]
+    },
+    {
+      "name": "Panel empresarial",
+      "item": [
+        {
+          "name": "KPIs del dashboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/enterprise/dashboard/kpis?desde={{desde}}&hasta={{hasta}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "enterprise",
+                "dashboard",
+                "kpis"
+              ],
+              "query": [
+                {
+                  "key": "desde",
+                  "value": "{{desde}}",
+                  "disabled": false
+                },
+                {
+                  "key": "hasta",
+                  "value": "{{hasta}}",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": [],
+          "description": "Si se envían fechas, usar YYYY-MM-DD; el backend exige ambas o ninguna."
+        },
+        {
+          "name": "Resumen financiero",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/enterprise/dashboard/financial-summary?periodo={{periodo}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "enterprise",
+                "dashboard",
+                "financial-summary"
+              ],
+              "query": [
+                {
+                  "key": "periodo",
+                  "value": "{{periodo}}",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": [],
+          "description": "periodo: semana, mes o trimestre."
+        }
+      ]
+    },
+    {
+      "name": "Vehículos",
+      "item": [
+        {
+          "name": "Crear vehículo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/enterprise/vehicles",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "enterprise",
+                "vehicles"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"placa\": \"ABC-123\",\n  \"tipo\": \"Van\",\n  \"marca\": \"{{vehicleBrand}}\",\n  \"modelo\": \"{{vehicleModel}}\",\n  \"anio_modelo\": 2024,\n  \"capacidad_pasajeros\": 15,\n  \"rendimiento_km_gal\": 32.5,\n  \"costo_por_km\": 850,\n  \"costo_despacho\": 45000,\n  \"estado\": \"disponible\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "description": "Guarda el id devuelto en vehicleId.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "const data = body?.data ?? body;",
+                  "const value = data?.id || data?.vehiculo_id;",
+                  "if (value) pm.environment.set(\"vehicleId\", value);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar vehículos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/enterprise/vehicles?estado=disponible&capacidad_minima=1&buscar=&pagina=1&limite=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "enterprise",
+                "vehicles"
+              ],
+              "query": [
+                {
+                  "key": "estado",
+                  "value": "disponible",
+                  "disabled": false
+                },
+                {
+                  "key": "capacidad_minima",
+                  "value": "1",
+                  "disabled": false
+                },
+                {
+                  "key": "buscar",
+                  "value": "",
+                  "disabled": false
+                },
+                {
+                  "key": "pagina",
+                  "value": "1",
+                  "disabled": false
+                },
+                {
+                  "key": "limite",
+                  "value": "20",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar vehículo",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/enterprise/vehicles/{{vehicleId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "enterprise",
+                "vehicles",
+                "{{vehicleId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"placa\": \"ABC-123\",\n  \"tipo\": \"Van\",\n  \"marca\": \"{{vehicleBrand}}\",\n  \"modelo\": \"{{vehicleModel}}\",\n  \"anio_modelo\": 2024,\n  \"capacidad_pasajeros\": 15,\n  \"rendimiento_km_gal\": 32.5,\n  \"costo_por_km\": 850,\n  \"costo_despacho\": 45000,\n  \"estado\": \"disponible\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Cambiar estado del vehículo",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/enterprise/vehicles/{{vehicleId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "enterprise",
+                "vehicles",
+                "{{vehicleId}}",
+                "status"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"mantenimiento\",\n  \"motivo\": \"Mantenimiento preventivo\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Conductores empresariales",
+      "item": [
+        {
+          "name": "Crear conductor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/enterprise/drivers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "enterprise",
+                "drivers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre_completo\": \"Conductor de prueba\",\n  \"numero_identificacion\": \"{{driverIdentification}}\",\n  \"telefono\": \"{{driverPhone}}\",\n  \"numero_licencia\": \"{{driverLicense}}\",\n  \"categoria_licencia\": \"C2\",\n  \"vencimiento_licencia\": \"2028-05-10\",\n  \"viatico_diario\": 60000,\n  \"estado\": \"disponible\",\n  \"tenant_user_id\": \"{{tenantUserId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "description": "Guarda el id devuelto en driverId. El campo tenant_user_id es opcional; si se informa, debe ser el tenant_user_id de un usuario activo del mismo tenant con rol driver. La respuesta incluye usuario_vinculado.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "const data = body?.data ?? body;",
+                  "const value = data?.id || data?.conductor_id;",
+                  "if (value) pm.environment.set(\"driverId\", value);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar conductores",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/enterprise/drivers?estado=disponible&buscar=&pagina=1&limite=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "enterprise",
+                "drivers"
+              ],
+              "query": [
+                {
+                  "key": "estado",
+                  "value": "disponible",
+                  "disabled": false
+                },
+                {
+                  "key": "buscar",
+                  "value": "",
+                  "disabled": false
+                },
+                {
+                  "key": "pagina",
+                  "value": "1",
+                  "disabled": false
+                },
+                {
+                  "key": "limite",
+                  "value": "20",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": [],
+          "description": "La respuesta de cada elemento incluye usuario_vinculado para indicar si el conductor tiene una cuenta Driver vinculada."
+        },
+        {
+          "name": "Actualizar conductor",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/enterprise/drivers/{{driverId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "enterprise",
+                "drivers",
+                "{{driverId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre_completo\": \"Conductor de prueba\",\n  \"numero_identificacion\": \"{{driverIdentification}}\",\n  \"telefono\": \"{{driverPhone}}\",\n  \"numero_licencia\": \"{{driverLicense}}\",\n  \"categoria_licencia\": \"C2\",\n  \"vencimiento_licencia\": \"2028-05-10\",\n  \"viatico_diario\": 60000,\n  \"estado\": \"disponible\",\n  \"tenant_user_id\": \"{{tenantUserId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "description": "El campo tenant_user_id es opcional; si se informa, debe ser el tenant_user_id de un usuario activo del mismo tenant con rol driver. La respuesta incluye usuario_vinculado."
+        },
+        {
+          "name": "Cambiar disponibilidad del conductor",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/enterprise/drivers/{{driverId}}/availability",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "enterprise",
+                "drivers",
+                "{{driverId}}",
+                "availability"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"disponible\",\n  \"observaciones\": \"Turno de prueba\",\n  \"desde\": \"2026-11-21T07:00:00Z\",\n  \"hasta\": \"2026-11-21T19:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Solicitudes empresariales",
+      "item": [
+        {
+          "name": "Crear solicitud",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/enterprise/requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "enterprise",
+                "requests"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre_cliente\": \"Cliente de prueba\",\n  \"origen\": {\n    \"direccion\": \"Barranquilla, Atlántico\",\n    \"lat\": 10.98,\n    \"lng\": -74.78\n  },\n  \"destino\": {\n    \"direccion\": \"Cartagena, Bolívar\",\n    \"lat\": 10.39,\n    \"lng\": -75.47\n  },\n  \"fecha_servicio\": \"{{fechaServicio}}\",\n  \"pasajeros\": 1,\n  \"tarifa_pactada\": 650000,\n  \"observaciones\": \"Solicitud de prueba\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "description": "Guarda el identificador devuelto en serviceRequestId para recomendaciones, candidatos y asignación.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "const data = body?.data ?? body;",
+                  "const value = data?.id || data?.solicitud_id || data?.service_request_id;",
+                  "if (value) pm.environment.set(\"serviceRequestId\", value);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar solicitudes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/enterprise/requests?estado=pendiente&fecha={{fecha}}&cliente=&pagina=1&limite=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "enterprise",
+                "requests"
+              ],
+              "query": [
+                {
+                  "key": "estado",
+                  "value": "pendiente",
+                  "disabled": false
+                },
+                {
+                  "key": "fecha",
+                  "value": "{{fecha}}",
+                  "disabled": false
+                },
+                {
+                  "key": "cliente",
+                  "value": "",
+                  "disabled": false
+                },
+                {
+                  "key": "pagina",
+                  "value": "1",
+                  "disabled": false
+                },
+                {
+                  "key": "limite",
+                  "value": "20",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Cambiar estado de solicitud",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/enterprise/requests/{{serviceRequestId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "enterprise",
+                "requests",
+                "{{serviceRequestId}}",
+                "status"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"cancelada\",\n  \"motivo_cancelacion\": \"Prueba de cancelación\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Recomendaciones para solicitud",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/enterprise/requests/{{serviceRequestId}}/recommendations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "enterprise",
+                "requests",
+                "{{serviceRequestId}}",
+                "recommendations"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Asignaciones y recorridos",
+      "item": [
+        {
+          "name": "Confirmar asignación",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/enterprise/assignments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "enterprise",
+                "assignments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"solicitud_id\": \"{{serviceRequestId}}\",\n  \"vehiculo_id\": \"{{vehicleId}}\",\n  \"conductor_id\": \"{{driverId}}\",\n  \"motivo_seleccion\": \"Opción elegida para prueba\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "description": "Confirma asignación de solicitud, vehículo y conductor.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "const data = body?.data ?? body;",
+                  "const value = data?.asignacion_id || data?.id || data?.assignment_id;",
+                  "if (value) pm.environment.set(\"assignmentId\", value);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cerrar gastos del recorrido",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/enterprise/trips/{{assignmentId}}/close-expenses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "enterprise",
+                "trips",
+                "{{assignmentId}}",
+                "close-expenses"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"km_reales\": 129.5,\n  \"costo_combustible\": 67000,\n  \"costo_peajes\": 42000,\n  \"costo_mantenimiento\": 103000,\n  \"costo_conductor\": 60000,\n  \"otros_gastos\": 15000,\n  \"observaciones\": \"Cierre de prueba\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reporte de rentabilidad",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/enterprise/reports/profitability?desde={{desde}}&hasta={{hasta}}&vehiculo_id={{vehicleId}}&conductor_id={{driverId}}&pagina=1&limite=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "enterprise",
+                "reports",
+                "profitability"
+              ],
+              "query": [
+                {
+                  "key": "desde",
+                  "value": "{{desde}}",
+                  "disabled": false
+                },
+                {
+                  "key": "hasta",
+                  "value": "{{hasta}}",
+                  "disabled": false
+                },
+                {
+                  "key": "vehiculo_id",
+                  "value": "{{vehicleId}}",
+                  "disabled": false
+                },
+                {
+                  "key": "conductor_id",
+                  "value": "{{driverId}}",
+                  "disabled": false
+                },
+                {
+                  "key": "pagina",
+                  "value": "1",
+                  "disabled": false
+                },
+                {
+                  "key": "limite",
+                  "value": "20",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "App Driver",
+      "item": [
+        {
+          "name": "Mi perfil",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/drivers/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "drivers",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Mis documentos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/drivers/me/documents?owner=conductor",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "drivers",
+                "me",
+                "documents"
+              ],
+              "query": [
+                {
+                  "key": "owner",
+                  "value": "conductor",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": [],
+          "description": "owner: conductor o vehiculo."
+        },
+        {
+          "name": "Descargar adjunto de documento",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/drivers/me/documents/{{documentOwner}}/{{documentId}}/file",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "drivers",
+                "me",
+                "documents",
+                "{{documentOwner}}",
+                "{{documentId}}",
+                "file"
+              ]
+            }
+          },
+          "response": [],
+          "description": "documentOwner: conductor o vehiculo. Usa id del documento devuelto por Mis documentos."
+        },
+        {
+          "name": "Resumen del día",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/drivers/me/day-summary?fecha={{fecha}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "drivers",
+                "me",
+                "day-summary"
+              ],
+              "query": [
+                {
+                  "key": "fecha",
+                  "value": "{{fecha}}",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Mis servicios",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/drivers/me/services",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "drivers",
+                "me",
+                "services"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Iniciar servicio",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/drivers/me/services/{{driverServiceId}}/start",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "drivers",
+                "me",
+                "services",
+                "{{driverServiceId}}",
+                "start"
+              ]
+            }
+          },
+          "response": [],
+          "description": "Usa el id de solicitud de servicio asignada, no el assignmentId. Sin cuerpo."
+        },
+        {
+          "name": "Finalizar servicio",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/drivers/me/services/{{driverServiceId}}/finish",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "drivers",
+                "me",
+                "services",
+                "{{driverServiceId}}",
+                "finish"
+              ]
+            }
+          },
+          "response": [],
+          "description": "Usa el id de solicitud de servicio asignada, no el assignmentId. Sin cuerpo."
         }
       ],
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Authorization",
-            "value": "Bearer {{tokenx}}"
+      "description": "Endpoints de autoservicio; el token debe corresponder al conductor autenticado."
+    },
+    {
+      "name": "OSRM externo (opcional)",
+      "description": "Llamada directa al proxy OSRM configurado, no es endpoint propio de VehiTrack.",
+      "item": [
+        {
+          "name": "Consultar ruta OSRM",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{osrmBaseUrl}}/route/v1/driving/-74.78,10.98;-75.47,10.39?overview=false",
+              "host": [
+                "{{osrmBaseUrl}}"
+              ],
+              "path": [
+                "route",
+                "v1",
+                "driving",
+                "-74.78,10.98;-75.47,10.39"
+              ],
+              "query": [
+                {
+                  "key": "overview",
+                  "value": "false"
+                }
+              ]
+            }
           },
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n    \"waypoints\": [\n        {\n            \"lat\": 10.98,\n            \"lon\": -74.78\n        },\n        {\n            \"lat\": 10.39,\n            \"lon\": -75.47\n        }\n    ],\n    \"profile\": \"car\"\n}",
-          "options": {
-            "raw": {
-              "language": "json"
-            }
-          }
-        },
-        "url": {
-          "raw": "{{baseUrl}}/api/v2/routes",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "api",
-            "v2",
-            "routes"
-          ]
+          "response": []
         }
-      },
-      "response": []
-    },
-    {
-      "name": "crear usuario",
-      "request": {
-        "auth": {
-          "type": "noauth"
-        },
-        "method": "POST",
-        "header": [
-          {
-            "key": "Authorization",
-            "value": "Bearer {{token}}"
-          },
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n    \"email\": \"despachador@empresa.com\",\n    \"full_name\": \"Despachador de flota\",\n    \"password\": \"UnaClaveSeguraDe12+\",\n    \"role_code\": \"dispatcher\"\n}",
-          "options": {
-            "raw": {
-              "language": "json"
-            }
-          }
-        },
-        "url": {
-          "raw": "{{baseUrl}}/api/v2/auth/users",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "api",
-            "v2",
-            "auth",
-            "users"
-          ]
-        }
-      },
-      "response": []
-    },
-    {
-      "name": "https://api.system-one-fact.com/route/route/v1/driving/-74.78,10.98;-75.47,10.39",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "https://api.system-one-fact.com/route/route/v1/driving/-74.78,10.98;-75.47,10.39?overview=false",
-          "protocol": "https",
-          "host": [
-            "api",
-            "system-one-fact",
-            "com"
-          ],
-          "path": [
-            "route",
-            "route",
-            "v1",
-            "driving",
-            "-74.78,10.98;-75.47,10.39"
-          ],
-          "query": [
-            {
-              "key": "overview",
-              "value": "false"
-            }
-          ]
-        }
-      },
-      "response": []
-    },
-    {
-      "name": "requests",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Authorization",
-            "value": "Bearer {{token}}"
-          },
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n    \"nombre_cliente\": \"Cliente de prueba\",\n    \"origen\": {\n        \"direccion\": \"Barranquilla\",\n        \"lat\": 10.98,\n        \"lng\": -74.78\n    },\n    \"destino\": {\n        \"direccion\": \"Cartagena\",\n        \"lat\": 10.39,\n        \"lng\": -75.47\n    },\n    \"fecha_servicio\": \"2026-11-29T07:00:00Z\",\n    \"pasajeros\": 1,\n    \"tarifa_pactada\": 650000,\n    \"observaciones\": \"Prueba API\"\n}",
-          "options": {
-            "raw": {
-              "language": "json"
-            }
-          }
-        },
-        "url": {
-          "raw": "{{baseUrl}}/api/v2/enterprise/requests",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "api",
-            "v2",
-            "enterprise",
-            "requests"
-          ]
-        }
-      },
-      "response": []
-    },
-    {
-      "name": "recommendations",
-      "request": {
-        "method": "GET",
-        "header": [
-          {
-            "key": "Authorization",
-            "value": "Bearer {{token}}"
-          }
-        ],
-        "url": {
-          "raw": "{{baseUrl}}/api/v2/enterprise/requests/{{serviceRequestId}}/recommendations",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "api",
-            "v2",
-            "enterprise",
-            "requests",
-            "{{serviceRequestId}}",
-            "recommendations"
-          ]
-        }
-      },
-      "response": []
+      ]
     }
   ]
 }
