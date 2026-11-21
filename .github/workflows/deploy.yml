@@ -2,7 +2,7 @@ name: Deploy ms-vehitrack (Go)
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main","develop"]
   workflow_dispatch: {}
 
 concurrency:
