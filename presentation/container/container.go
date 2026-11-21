@@ -6,10 +6,13 @@ import (
 	"log"
 	"time"
 
+	assignmentapp "ms-vehitrack/application/assignments"
+	"ms-vehitrack/application/businessauth"
 	"ms-vehitrack/application/config"
 	"ms-vehitrack/application/geocoding"
 	"ms-vehitrack/application/packages"
 	"ms-vehitrack/application/routing"
+	"ms-vehitrack/application/servicerequests"
 	"ms-vehitrack/application/services"
 	"ms-vehitrack/application/tracking"
 	"ms-vehitrack/application/trafficquery"
@@ -63,9 +66,12 @@ type Container struct {
 	userDataService  *userdata.Service
 
 	// F4/F6/F7: ruteo (cascada OSRM), ingesta+viajes+OBD, y lecturas de trafico por bbox.
-	routingService      *routing.Service
-	trackingService     *tracking.Service
-	trafficQueryService *trafficquery.Service
+	routingService        *routing.Service
+	assignmentService     *assignmentapp.Service
+	serviceRequestService *servicerequests.Service
+	businessAuthService   *businessauth.Service
+	trackingService       *tracking.Service
+	trafficQueryService   *trafficquery.Service
 }
 
 func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
@@ -283,6 +289,23 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 		log.Printf("[CONTAINER] operation=routing status=disabled")
 	}
 
+	var assignmentService *assignmentapp.Service
+	if dbPool != nil {
+		assignmentService = assignmentapp.NewService(
+			repositories.NewPostgresAssignmentCandidateStore(dbPool), routingService)
+		log.Printf("[CONTAINER] operation=assignment-candidates status=enabled")
+	} else {
+		log.Printf("[CONTAINER] operation=assignment-candidates status=disabled")
+	}
+	var serviceRequestService *servicerequests.Service
+	if dbPool != nil {
+		serviceRequestService = servicerequests.NewService(
+			repositories.NewPostgresServiceRequestStore(dbPool), routingService)
+		log.Printf("[CONTAINER] operation=service-requests status=enabled")
+	} else {
+		log.Printf("[CONTAINER] operation=service-requests status=disabled")
+	}
+
 	// F6 — Ingesta por lote + viajes + sesiones OBD: store PG (tracking.*/device.* tenant-scoped).
 	var trackingService *tracking.Service
 	if dbPool != nil {
@@ -301,6 +324,15 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 		log.Printf("[CONTAINER] operation=traffic-query status=enabled")
 	} else {
 		log.Printf("[CONTAINER] operation=traffic-query status=disabled")
+	}
+
+	var businessAuthService *businessauth.Service
+	if dbPool != nil {
+		businessAuthService = businessauth.NewService(
+			repositories.NewPostgresBusinessAuthStore(dbPool), cfg.JWTSigningKey, cfg.JWTIssuer)
+		log.Printf("[CONTAINER] operation=business-auth status=enabled")
+	} else {
+		log.Printf("[CONTAINER] operation=business-auth status=disabled")
 	}
 
 	return &Container{
@@ -326,8 +358,11 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 		offlineService:          offlineService,
 		userDataService:         userDataService,
 		routingService:          routingService,
+		assignmentService:       assignmentService,
+		serviceRequestService:   serviceRequestService,
 		trackingService:         trackingService,
 		trafficQueryService:     trafficQueryService,
+		businessAuthService:     businessAuthService,
 	}, nil
 }
 
@@ -519,6 +554,27 @@ func (c *Container) ResolveRoutingService() (*routing.Service, bool) {
 		return nil, false
 	}
 	return c.routingService, true
+}
+
+func (c *Container) ResolveAssignmentService() (*assignmentapp.Service, bool) {
+	if c.assignmentService == nil {
+		return nil, false
+	}
+	return c.assignmentService, true
+}
+
+func (c *Container) ResolveServiceRequestService() (*servicerequests.Service, bool) {
+	if c.serviceRequestService == nil {
+		return nil, false
+	}
+	return c.serviceRequestService, true
+}
+
+func (c *Container) ResolveBusinessAuthService() (*businessauth.Service, bool) {
+	if c.businessAuthService == nil {
+		return nil, false
+	}
+	return c.businessAuthService, true
 }
 
 // ResolveTrackingService devuelve el servicio de ingesta por lote + viajes + OBD; false si

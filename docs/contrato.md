@@ -21,6 +21,31 @@ Todas las rutas bajo `/api/v1/*` exigen API key.
 
 Sin `X-API-Key` válida → `401`.
 
+### API empresarial v2
+
+`POST /api/v2/auth/login` recibe `email`, `password` y `tenant_id`; devuelve un JWT Bearer.
+Las demás rutas v2 requieren `Authorization: Bearer <token>`. El token identifica usuario y
+tenant; el cliente no puede elegir el tenant en las operaciones protegidas.
+
+#### `POST /api/v2/auth/users`
+
+Crea un usuario empresarial dentro del tenant del token. Requiere los permisos `users.write`;
+si se solicita un rol distinto de `viewer`, también requiere `users.assign_roles`. El rol
+predeterminado es `viewer`. No permite asignar `super_admin`.
+
+```json
+{
+  "email": "operador@empresa.com",
+  "full_name": "Operador de flota",
+  "password": "Use-una-clave-segura-12",
+  "role_code": "viewer"
+}
+```
+
+`role_code` es opcional. La contraseña debe tener entre 12 y 72 bytes y se almacena como hash
+bcrypt. El correo es único globalmente; un correo existente devuelve `409`. La respuesta omite
+la contraseña y su hash.
+
 ---
 
 ## 2. Endpoints públicos (sin API key)

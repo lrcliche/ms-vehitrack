@@ -19,6 +19,8 @@ type Config struct {
 	ShutdownTimeoutSeconds   int
 	MaxBodyBytes             int64
 	APIKey                   string
+	JWTSigningKey            string
+	JWTIssuer                string
 	RateLimitRPS             float64
 	RateLimitBurst           int
 	PostgresEnabled          bool
@@ -62,6 +64,8 @@ func MustLoad() Config {
 		ShutdownTimeoutSeconds:   getEnvAsInt("SHUTDOWN_TIMEOUT_SECONDS", 10),
 		MaxBodyBytes:             int64(getEnvAsInt("MAX_BODY_BYTES", 65536)),
 		APIKey:                   os.Getenv("API_KEY"),
+		JWTSigningKey:            os.Getenv("JWT_SIGNING_KEY"),
+		JWTIssuer:                getEnv("JWT_ISSUER", "ms-vehitrack"),
 		RateLimitRPS:             getEnvAsFloat("RATE_LIMIT_RPS", 20),
 		RateLimitBurst:           getEnvAsInt("RATE_LIMIT_BURST", 40),
 		PostgresEnabled:          getEnvAsBool("POSTGRES_ENABLED", false),
