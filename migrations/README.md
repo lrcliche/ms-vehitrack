@@ -31,6 +31,8 @@ psql "$POSTGRES_DSN" -f migrations/013_business_jwt_routes.sql
 psql "$POSTGRES_DSN" -f migrations/014_business_assignment_candidates.sql
 psql "$POSTGRES_DSN" -f migrations/015_business_service_requests_api.sql
 psql "$POSTGRES_DSN" -f migrations/016_business_enterprise_operations.sql
+psql "$POSTGRES_DSN" -f migrations/017_driver_app_self_service.sql
+psql "$POSTGRES_DSN" -f migrations/018_driver_service_transitions.sql
 ```
 
 La `014` entrega los candidatos de asignación con datos del vehículo, conductor, ubicación y
@@ -42,6 +44,20 @@ La `016` implementa lecturas y operaciones empresariales (dashboard, flota, cond
 solicitudes, asignaciones, cierre de gastos y rentabilidad) para `/api/v2/enterprise`. Las
 operaciones requieren JWT v2, las rutinas comprueban tenant/permisos y la API no consulta tablas
 empresariales directamente. Requiere los roles PostgreSQL `vehitrack_owner` y `vehitrack_app`.
+
+La `017` agrega las lecturas autenticadas del App Driver (`/api/v2/drivers/me/*`). El conductor
+se identifica por el `tenant_user_id` del JWT vinculado en `business.driver`; la API llama solo
+funciones `business.fnc_*`. Los adjuntos se descargan por una ruta JWT protegida y no se exponen
+claves de almacenamiento. La fecha del resumen usa `America/Bogota` y los documentos vencen
+pronto dentro de 30 días. El esquema actual no tiene foto de conductor ni código comercial de
+solicitud: `foto_url` devuelve `null` y `codigo` es una referencia estable derivada del UUID.
+
+La `018` agrega las transiciones autenticadas `POST /api/v2/drivers/me/services/{id}/start` y
+`POST /api/v2/drivers/me/services/{id}/finish`. El `{id}` es el ID de la solicitud devuelto por
+`GET /drivers/me/services`; ambas funciones derivan al conductor del JWT y verifican tenant,
+asignación confirmada y estado antes de actualizar la ejecución. `finish` marca la solicitud como
+completada y libera conductor y vehículo; los gastos y kilometraje real siguen siendo un cierre
+administrativo separado y no se inventan desde la app del conductor.
 
 Las `001`–`004` son el paquete geoespacial canónico. La `005` formaliza las tablas planas
 `traffic_batches/samples/aggregates` que el repositorio Go (`postgres_traffic_store.go`) ya

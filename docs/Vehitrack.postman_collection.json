@@ -1,0 +1,228 @@
+{
+  "info": {
+    "_postman_id": "0d6b8fa6-83e0-4fe0-b218-303fb07b701a",
+    "name": "Vehitrack",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "38999040"
+  },
+  "item": [
+    {
+      "name": "login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"email\": \"despachador@empresa.com\",\n    \"password\": \"UnaClaveSeguraDe12+\",\n    \"tenant_id\": \"00000000-0000-0000-0000-000000000001\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v2/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v2",
+            "auth",
+            "login"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "geo-rutas",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const baseUrl = pm.environment.get(\"baseUrl\");\n\nconst loginResponse = await pm.sendRequest({\n  url: baseUrl+\"/api/v2/auth/login\",\n  method: \"POST\",\n  header: {\n    \"Content-Type\": \"application/json\"\n  },\n  body: {\n    mode: \"raw\",\n    raw: JSON.stringify({\n      email: \"despachador@empresa.com\",\n      password: \"UnaClaveSeguraDe12+\",\n      tenant_id: \"00000000-0000-0000-0000-000000000001\"\n    })\n  }\n});\n\nif (loginResponse.code < 200 || loginResponse.code >= 300) {\n  throw new Error(`Login falló: ${loginResponse.code} ${loginResponse.text()}`);\n}\n\nconst loginData = loginResponse.json();\nconst token = loginData?.data?.access_token || loginData.token;\n\nif (!token) {\n  throw new Error(\"La respuesta del login no contiene access_token ni token\");\n}\n\npm.variables.set(\"tokenx\", token);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{tokenx}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"waypoints\": [\n        {\n            \"lat\": 10.98,\n            \"lon\": -74.78\n        },\n        {\n            \"lat\": 10.39,\n            \"lon\": -75.47\n        }\n    ],\n    \"profile\": \"car\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v2/routes",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v2",
+            "routes"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "crear usuario",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"email\": \"despachador@empresa.com\",\n    \"full_name\": \"Despachador de flota\",\n    \"password\": \"UnaClaveSeguraDe12+\",\n    \"role_code\": \"dispatcher\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v2/auth/users",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v2",
+            "auth",
+            "users"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "https://api.system-one-fact.com/route/route/v1/driving/-74.78,10.98;-75.47,10.39",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "https://api.system-one-fact.com/route/route/v1/driving/-74.78,10.98;-75.47,10.39?overview=false",
+          "protocol": "https",
+          "host": [
+            "api",
+            "system-one-fact",
+            "com"
+          ],
+          "path": [
+            "route",
+            "route",
+            "v1",
+            "driving",
+            "-74.78,10.98;-75.47,10.39"
+          ],
+          "query": [
+            {
+              "key": "overview",
+              "value": "false"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "requests",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"nombre_cliente\": \"Cliente de prueba\",\n    \"origen\": {\n        \"direccion\": \"Barranquilla\",\n        \"lat\": 10.98,\n        \"lng\": -74.78\n    },\n    \"destino\": {\n        \"direccion\": \"Cartagena\",\n        \"lat\": 10.39,\n        \"lng\": -75.47\n    },\n    \"fecha_servicio\": \"2026-11-29T07:00:00Z\",\n    \"pasajeros\": 1,\n    \"tarifa_pactada\": 650000,\n    \"observaciones\": \"Prueba API\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v2/enterprise/requests",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v2",
+            "enterprise",
+            "requests"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "recommendations",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v2/enterprise/requests/{{serviceRequestId}}/recommendations",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v2",
+            "enterprise",
+            "requests",
+            "{{serviceRequestId}}",
+            "recommendations"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}

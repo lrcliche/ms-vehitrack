@@ -51,6 +51,7 @@ func New(appContainer *container.Container) *gin.Engine {
 	enterpriseOperationsHandler := handlers.NewEnterpriseOperationsHandler(appContainer)
 	enterpriseRequestHandler := handlers.NewEnterpriseRequestHandler(appContainer)
 	businessAuthHandler := handlers.NewBusinessAuthHandler(appContainer)
+	driverAppHandler := handlers.NewDriverAppHandler(appContainer)
 	trackingHandler := handlers.NewTrackingHandler(appContainer)
 	trafficBBoxHandler := handlers.NewTrafficBBoxHandler(appContainer)
 
@@ -165,6 +166,13 @@ func New(appContainer *container.Container) *gin.Engine {
 		protected.POST("/enterprise/trips/:assignmentID/close-expenses", enterpriseOperationsHandler.CloseTripExpenses)
 		protected.GET("/enterprise/reports/profitability", enterpriseOperationsHandler.ProfitabilityReport)
 		protected.POST("/auth/users", businessAuthHandler.CreateUser)
+		protected.GET("/drivers/me", driverAppHandler.Profile)
+		protected.GET("/drivers/me/documents", driverAppHandler.Documents)
+		protected.GET("/drivers/me/documents/:owner/:documentID/file", driverAppHandler.DocumentFile)
+		protected.GET("/drivers/me/day-summary", driverAppHandler.DaySummary)
+		protected.GET("/drivers/me/services", driverAppHandler.Services)
+		protected.POST("/drivers/me/services/:id/start", driverAppHandler.StartService)
+		protected.POST("/drivers/me/services/:id/finish", driverAppHandler.FinishService)
 	}
 
 	return engine
