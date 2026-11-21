@@ -2,14 +2,18 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"ms-vehitrack/application/routing"
 	"ms-vehitrack/domain/entities"
 	"ms-vehitrack/presentation/dto"
 	presentationerrors "ms-vehitrack/presentation/errors"
+	"ms-vehitrack/presentation/logging"
 	"ms-vehitrack/presentation/middleware"
 	"ms-vehitrack/presentation/responses"
 )
@@ -90,10 +94,27 @@ func (h *RoutingHandler) RouteV2(c *gin.Context) {
 	raw, cacheHit, err := svc.RouteForUser(c.Request.Context(), claims.TenantID,
 		claims.Subject, claims.TenantUserID, waypoints, req.Profile)
 	if err != nil {
-		responses.ErrorFromApp(c, presentationerrors.Map(err))
+		appErr := presentationerrors.Map(err)
+		if appErr.Status >= http.StatusInternalServerError {
+			logRouteV2Error(err)
+		}
+		responses.ErrorFromApp(c, appErr)
 		return
 	}
 	h.writeRouteResponse(c, raw, cacheHit)
+}
+
+func logRouteV2Error(err error) {
+	var dbErr *pgconn.PgError
+	if errors.As(err, &dbErr) {
+		logging.LogComponent("ROUTING_V2_ERROR", fmt.Sprintf(
+			"operation=route sqlstate=%s severity=%s message=%q schema=%s table=%s column=%s constraint=%s routine=%s",
+			dbErr.Code, dbErr.Severity, dbErr.Message, dbErr.SchemaName, dbErr.TableName,
+			dbErr.ColumnName, dbErr.ConstraintName, dbErr.Routine,
+		))
+		return
+	}
+	logging.LogError("ROUTING_V2_ERROR", "operation=route", err)
 }
 
 func (h *RoutingHandler) writeRouteResponse(c *gin.Context, raw json.RawMessage, cacheHit bool) {

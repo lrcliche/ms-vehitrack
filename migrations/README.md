@@ -19,6 +19,24 @@ psql "$POSTGRES_DSN" -f migrations/007_routing_traffic_eta.sql# ETA con trafico 
 psql "$POSTGRES_DSN" -f migrations/008_routing_alternatives.sql# alternativas reales: fnc_get_route devuelve routes[]
 ```
 
+## API empresarial v2
+
+Aplicar en orden después del modelo base existente; estas migraciones son manuales y no se
+ejecutan al iniciar la API:
+
+```bash
+psql "$POSTGRES_DSN" -f migrations/011_business_model.sql
+psql "$POSTGRES_DSN" -f migrations/012_business_seed.sql
+psql "$POSTGRES_DSN" -f migrations/013_business_jwt_routes.sql
+psql "$POSTGRES_DSN" -f migrations/014_business_assignment_candidates.sql
+psql "$POSTGRES_DSN" -f migrations/015_business_service_requests_api.sql
+```
+
+La `014` entrega los candidatos de asignación con datos del vehículo, conductor, ubicación y
+estimaciones. La `015` guarda `customer_name` como referencia de la solicitud y agrega la
+rutina autorizada para crear solicitudes desde la API. La ruta de creación calcula el recorrido
+antes de insertar para no dejar una solicitud creada si OSRM no puede estimarlo.
+
 Las `001`–`004` son el paquete geoespacial canónico. La `005` formaliza las tablas planas
 `traffic_batches/samples/aggregates` que el repositorio Go (`postgres_traffic_store.go`) ya
 usaba sin DDL versionado. La `006` consolida los grants del rol de la app. La `007` añade el

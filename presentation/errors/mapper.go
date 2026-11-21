@@ -33,6 +33,12 @@ func Map(err error) AppError {
 		return New(http.StatusUnprocessableEntity, "validation-error", err.Error())
 	case errors.Is(err, entities.ErrTrafficStoreUnavailable):
 		return New(http.StatusServiceUnavailable, "traffic-unavailable", err.Error())
+	case errors.Is(err, entities.ErrAssignmentCandidatesForbidden):
+		return New(http.StatusForbidden, "forbidden", "insufficient permission to read service assignments")
+	case errors.Is(err, entities.ErrAssignmentRequestNotFound):
+		return New(http.StatusNotFound, "not-found", "service request not found")
+	case errors.Is(err, entities.ErrAssignmentRequestNotPending):
+		return New(http.StatusConflict, "service-request-not-pending", "service request is not pending")
 	// Validaciones baratas del modelo PG (geocoding/offline/userdata): faltan campos
 	// obligatorios en la peticion antes de tocar la BD. Son 400, no 500.
 	case errors.Is(err, entities.ErrDeviceIDRequired),

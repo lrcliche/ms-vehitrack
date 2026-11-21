@@ -7,6 +7,7 @@ package routing
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"ms-vehitrack/domain/entities"
 	"ms-vehitrack/domain/ports"
@@ -23,6 +24,12 @@ type RouteComputation struct {
 	// o nil si no hubo. Se persiste tal cual en routing.route_cache.alternatives; fnc_get_route
 	// las devuelve junto a la principal en el array `routes`.
 	Alternatives json.RawMessage
+}
+
+type RouteEstimate struct {
+	DistanceM          float64
+	DurationS          float64
+	DurationInTrafficS *float64
 }
 
 // RouteEngine es el motor de ruteo externo (OSRM), detras de una interfaz para no acoplar la
@@ -84,6 +91,36 @@ func (s *Service) RouteForUser(
 		return nil, false, entities.ErrBusinessRoutingUnavailable
 	}
 	return s.route(ctx, tenantID, userID, waypoints, profile, store, tenantUserID)
+}
+
+// EstimateForUser resolves a user-attributed route through the shared cache and returns only
+// the distance and ETA fields needed by assignment estimation.
+func (s *Service) EstimateForUser(
+	ctx context.Context, tenantID, userID, tenantUserID string,
+	waypoints []entities.Waypoint, profile string,
+) (*RouteEstimate, error) {
+	raw, _, err := s.RouteForUser(ctx, tenantID, userID, tenantUserID, waypoints, profile)
+	if err != nil {
+		return nil, err
+	}
+	var result struct {
+		Routes []struct {
+			DistanceM          float64  `json:"distance_m"`
+			DurationS          float64  `json:"duration_s"`
+			DurationInTrafficS *float64 `json:"duration_in_traffic_s"`
+		} `json:"routes"`
+	}
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, err
+	}
+	if len(result.Routes) == 0 {
+		return nil, fmt.Errorf("route estimate response has no routes")
+	}
+	main := result.Routes[0]
+	return &RouteEstimate{
+		DistanceM: main.DistanceM, DurationS: main.DurationS,
+		DurationInTrafficS: main.DurationInTrafficS,
+	}, nil
 }
 
 func (s *Service) route(
