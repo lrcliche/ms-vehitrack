@@ -36,8 +36,10 @@ type AssignmentDriver struct {
 	ID                string  `json:"id"`
 	FullName          string  `json:"full_name"`
 	Phone             *string `json:"phone"`
+	LicenseNumber     *string `json:"license_number"`
 	LicenseCategory   *string `json:"license_category"`
 	LicenseExpiresAt  *string `json:"license_expires_at"`
+	DailyAllowanceCOP float64 `json:"daily_allowance_cop"`
 	OperationalStatus string  `json:"operational_status"`
 }
 

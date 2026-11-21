@@ -21,6 +21,8 @@ var vtStatus = map[string]struct {
 	"VT041": {http.StatusNotFound, "NOT_FOUND"}, // device no visible en el tenant
 	"VT049": {http.StatusNotFound, "NOT_FOUND"}, // registro inexistente o ya eliminado
 	"VT052": {http.StatusNotFound, "NOT_FOUND"},
+	"VT075": {http.StatusConflict, "CONFLICT"},
+	"VT076": {http.StatusConflict, "CONFLICT"},
 
 	// 403 DEVICE_BLOCKED
 	"VT002": {http.StatusForbidden, "DEVICE_BLOCKED"},
@@ -39,10 +41,13 @@ var vtStatus = map[string]struct {
 	// 402 DEVICE_QUOTA_EXCEEDED
 	"VT022": {http.StatusPaymentRequired, "DEVICE_QUOTA_EXCEEDED"},
 
+	// 403 FORBIDDEN
+	"VT080": {http.StatusForbidden, "FORBIDDEN"},
+
 	// 503 NOT_READY (despliegue incompleto: falta clave en app_setting / diccionario / paquete)
 	"VT010": {http.StatusServiceUnavailable, "NOT_READY"},
 	"VT030": {http.StatusServiceUnavailable, "NOT_READY"},
-	"VT070": {http.StatusServiceUnavailable, "NOT_READY"},
+	"VT070": {http.StatusServiceUnavailable, "NOT_READY"}, // región sin paquete publicado
 
 	// 400 INVALID_REQUEST
 	"VT024": {http.StatusBadRequest, "INVALID_REQUEST"},

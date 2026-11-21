@@ -30,12 +30,18 @@ psql "$POSTGRES_DSN" -f migrations/012_business_seed.sql
 psql "$POSTGRES_DSN" -f migrations/013_business_jwt_routes.sql
 psql "$POSTGRES_DSN" -f migrations/014_business_assignment_candidates.sql
 psql "$POSTGRES_DSN" -f migrations/015_business_service_requests_api.sql
+psql "$POSTGRES_DSN" -f migrations/016_business_enterprise_operations.sql
 ```
 
 La `014` entrega los candidatos de asignación con datos del vehículo, conductor, ubicación y
 estimaciones. La `015` guarda `customer_name` como referencia de la solicitud y agrega la
 rutina autorizada para crear solicitudes desde la API. La ruta de creación calcula el recorrido
 antes de insertar para no dejar una solicitud creada si OSRM no puede estimarlo.
+
+La `016` implementa lecturas y operaciones empresariales (dashboard, flota, conductores,
+solicitudes, asignaciones, cierre de gastos y rentabilidad) para `/api/v2/enterprise`. Las
+operaciones requieren JWT v2, las rutinas comprueban tenant/permisos y la API no consulta tablas
+empresariales directamente. Requiere los roles PostgreSQL `vehitrack_owner` y `vehitrack_app`.
 
 Las `001`–`004` son el paquete geoespacial canónico. La `005` formaliza las tablas planas
 `traffic_batches/samples/aggregates` que el repositorio Go (`postgres_traffic_store.go`) ya

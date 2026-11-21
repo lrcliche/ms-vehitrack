@@ -58,3 +58,38 @@ func (s *PostgresAssignmentCandidateStore) FindAssignmentCandidates(
 	}
 	return result.ServiceRequest, result.Candidates, nil
 }
+
+func (s *PostgresAssignmentCandidateStore) ConfirmAssignment(
+	ctx context.Context, tenantID, actorUserID, tenantUserID string, command entities.EnterpriseAssignmentCommand,
+) (*entities.EnterpriseAssignmentResult, error) {
+	var raw []byte
+	err := s.pool.WithTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `CALL business.prc_confirm_enterprise_assignment(
+			$1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6::uuid,$7::numeric,$8::numeric,$9::numeric,$10,$11::jsonb)`,
+			tenantID, actorUserID, tenantUserID, command.RequestID, command.VehicleID, command.DriverID,
+			command.EmptyKM, command.ServiceKM, command.EstimatedDurationS, command.Reason, nil,
+		).Scan(&raw)
+	})
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Code {
+			case "VT070":
+				return nil, entities.ErrAssignmentCandidatesForbidden
+			case "VT075":
+				return nil, entities.ErrAssignmentCandidateUnavailable
+			case "VT052":
+				return nil, entities.ErrAssignmentRequestNotFound
+			}
+		}
+		return nil, fmt.Errorf("confirm enterprise assignment: %w", err)
+	}
+	var result entities.EnterpriseAssignmentResult
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, fmt.Errorf("decode confirmed enterprise assignment: %w", err)
+	}
+	if result.AssignmentID == "" {
+		return nil, fmt.Errorf("decode confirmed enterprise assignment: id missing")
+	}
+	return &result, nil
+}

@@ -39,6 +39,12 @@ func Map(err error) AppError {
 		return New(http.StatusNotFound, "not-found", "service request not found")
 	case errors.Is(err, entities.ErrAssignmentRequestNotPending):
 		return New(http.StatusConflict, "service-request-not-pending", "service request is not pending")
+	case errors.Is(err, entities.ErrAssignmentCandidateUnavailable):
+		return New(http.StatusConflict, "assignment-candidate-unavailable", "selected vehicle and driver are not eligible for this request")
+	case errors.Is(err, entities.ErrEnterpriseForbidden):
+		return New(http.StatusForbidden, "forbidden", "insufficient permission for this enterprise operation")
+	case errors.Is(err, entities.ErrEnterpriseInvalid):
+		return New(http.StatusBadRequest, "invalid-request", "invalid enterprise request")
 	// Validaciones baratas del modelo PG (geocoding/offline/userdata): faltan campos
 	// obligatorios en la peticion antes de tocar la BD. Son 400, no 500.
 	case errors.Is(err, entities.ErrDeviceIDRequired),
