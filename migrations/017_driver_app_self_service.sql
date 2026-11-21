@@ -226,7 +226,7 @@ BEGIN
         LEFT JOIN LATERAL (
             SELECT cc0.name,cc0.phone,cc0.email FROM business.customer_contact cc0
             WHERE cc0.tenant_id=sr.tenant_id AND cc0.customer_id=sr.customer_id
-            ORDER BY cc0.is_primary DESC,cc0.id LIMIT 1
+            ORDER BY cc0.id LIMIT 1
         ) cc ON true
         LEFT JOIN LATERAL (
             SELECT SUM(COALESCE(st.distance_km,tr.distance_m/1000.0)) AS actual_km,

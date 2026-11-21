@@ -34,6 +34,7 @@ psql "$POSTGRES_DSN" -f migrations/016_business_enterprise_operations.sql
 psql "$POSTGRES_DSN" -f migrations/017_driver_app_self_service.sql
 psql "$POSTGRES_DSN" -f migrations/018_driver_service_transitions.sql
 psql "$POSTGRES_DSN" -f migrations/019_enterprise_driver_user_link.sql
+psql "$POSTGRES_DSN" -f migrations/020_driver_services_contact_order.sql
 ```
 
 La `014` entrega los candidatos de asignación con datos del vehículo, conductor, ubicación y
@@ -64,6 +65,10 @@ La `019` permite enviar `tenant_user_id` opcional al crear o actualizar un condu
 `/api/v2/enterprise/drivers`. La rutina comprueba que la cuenta esté activa en el mismo tenant,
 tenga el rol `driver` y no esté vinculada a otro conductor. Omitir el campo conserva el vínculo
 actual; la respuesta y el listado informan `usuario_vinculado`.
+
+La `020` corrige la selección del contacto de servicio: `business.customer_contact` no tiene una
+columna `is_primary`, así que el ordenamiento usa el ID del contacto y evita un error SQL al leer
+los servicios del conductor.
 
 Las `001`–`004` son el paquete geoespacial canónico. La `005` formaliza las tablas planas
 `traffic_batches/samples/aggregates` que el repositorio Go (`postgres_traffic_store.go`) ya
