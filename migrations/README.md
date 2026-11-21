@@ -35,6 +35,7 @@ psql "$POSTGRES_DSN" -f migrations/017_driver_app_self_service.sql
 psql "$POSTGRES_DSN" -f migrations/018_driver_service_transitions.sql
 psql "$POSTGRES_DSN" -f migrations/019_enterprise_driver_user_link.sql
 psql "$POSTGRES_DSN" -f migrations/020_driver_services_contact_order.sql
+psql "$POSTGRES_DSN" -f migrations/021_driver_app_jwt_location.sql
 ```
 
 La `014` entrega los candidatos de asignación con datos del vehículo, conductor, ubicación y
@@ -69,6 +70,14 @@ actual; la respuesta y el listado informan `usuario_vinculado`.
 La `020` corrige la selección del contacto de servicio: `business.customer_contact` no tiene una
 columna `is_primary`, así que el ordenamiento usa el ID del contacto y evita un error SQL al leer
 los servicios del conductor.
+
+La `021` agrega `POST /api/v2/drivers/me/telemetry`, autenticado con JWT de conductor y `X-Device-Id`,
+con el mismo body de batch que v1. En una sola transacción valida que el dispositivo activo esté
+vinculado al vehículo del conductor, guarda las muestras en `tracking.position` y actualiza la
+posición actual del conductor en `business.driver_location` con la muestra reciente y precisa.
+Las recomendaciones usan esa posición si tiene máximo diez minutos y precisión de hasta 100 m;
+si no, usan la última posición del dispositivo del vehículo. `POST /api/v1/telemetry/batch`
+permanece disponible sin cambios y sigue guardando historial por dispositivo.
 
 Las `001`–`004` son el paquete geoespacial canónico. La `005` formaliza las tablas planas
 `traffic_batches/samples/aggregates` que el repositorio Go (`postgres_traffic_store.go`) ya

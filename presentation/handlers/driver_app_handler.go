@@ -10,6 +10,8 @@ import (
 
 	"ms-vehitrack/application/businessauth"
 	"ms-vehitrack/application/drivers"
+	"ms-vehitrack/domain/entities"
+	"ms-vehitrack/presentation/dto"
 	presentationerrors "ms-vehitrack/presentation/errors"
 	"ms-vehitrack/presentation/middleware"
 	"ms-vehitrack/presentation/responses"
@@ -85,6 +87,58 @@ func (h *DriverAppHandler) Services(c *gin.Context) {
 		return
 	}
 	responses.Success(c, http.StatusOK, result)
+}
+
+func (h *DriverAppHandler) UpdateLocation(c *gin.Context) {
+	claims, service, ok := h.context(c)
+	if !ok {
+		return
+	}
+	var req dto.DriverLocationRequest
+	if err := c.ShouldBindJSON(&req); err != nil || req.Latitude == nil || req.Longitude == nil {
+		responses.Error(c, http.StatusBadRequest, "invalid-request", "lat, lon and recorded_at are required")
+		return
+	}
+	deviceID := c.GetHeader(middleware.DeviceIDHeader)
+	if deviceID == "" {
+		responses.Error(c, http.StatusBadRequest, "invalid-request", "missing X-Device-Id")
+		return
+	}
+	result, err := service.UpdateLocation(c.Request.Context(), claims.TenantID, claims.Subject, claims.TenantUserID,
+		entities.DriverLocation{
+			DeviceID: deviceID,
+			Latitude: *req.Latitude, Longitude: *req.Longitude, AccuracyM: req.AccuracyM,
+			RecordedAt: req.RecordedAt.UTC().Format(time.RFC3339Nano),
+		})
+	if err != nil {
+		h.respondError(c, err)
+		return
+	}
+	responses.Success(c, http.StatusAccepted, result)
+}
+
+func (h *DriverAppHandler) IngestTelemetry(c *gin.Context) {
+	claims, service, ok := h.context(c)
+	if !ok {
+		return
+	}
+	deviceID := c.GetHeader(middleware.DeviceIDHeader)
+	if deviceID == "" {
+		responses.Error(c, http.StatusBadRequest, "invalid-request", "missing X-Device-Id")
+		return
+	}
+	var req dto.TelemetryBatchRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		responses.Error(c, http.StatusBadRequest, "invalid-request", "invalid telemetry batch request")
+		return
+	}
+	result, err := service.IngestTelemetry(c.Request.Context(), claims.TenantID, claims.Subject, claims.TenantUserID,
+		deviceID, req.BatchID, req.Samples, req.ClientCreatedAt)
+	if err != nil {
+		h.respondError(c, err)
+		return
+	}
+	responses.Success(c, http.StatusAccepted, result)
 }
 
 func (h *DriverAppHandler) StartService(c *gin.Context) {

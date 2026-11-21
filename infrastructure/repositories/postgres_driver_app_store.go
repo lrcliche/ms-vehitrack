@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -31,6 +32,11 @@ func (s *PostgresDriverAppStore) DaySummary(ctx context.Context, tenantID, userI
 
 func (s *PostgresDriverAppStore) Services(ctx context.Context, tenantID, userID, tenantUserID string) (json.RawMessage, error) {
 	return s.function(ctx, tenantID, `SELECT business.fnc_driver_me_services($1::uuid,$2::uuid,$3::uuid)`, tenantID, userID, tenantUserID)
+}
+
+func (s *PostgresDriverAppStore) IngestTelemetry(ctx context.Context, tenantID, userID, tenantUserID, deviceID, batchID string, samples json.RawMessage, clientCreatedAt *time.Time) (json.RawMessage, error) {
+	return s.function(ctx, tenantID, `SELECT business.fnc_driver_me_ingest_telemetry($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6::jsonb,$7::timestamptz)`,
+		tenantID, userID, tenantUserID, deviceID, batchID, samples, clientCreatedAt)
 }
 
 func (s *PostgresDriverAppStore) StartService(ctx context.Context, tenantID, userID, tenantUserID, serviceID string) (json.RawMessage, error) {

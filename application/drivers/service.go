@@ -1,6 +1,7 @@
 package drivers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -62,6 +63,43 @@ func (s *Service) Services(ctx context.Context, tenantID, userID, tenantUserID s
 		return nil, ErrDriverAppUnavailable
 	}
 	return s.store.Services(ctx, tenantID, userID, tenantUserID)
+}
+
+func (s *Service) UpdateLocation(ctx context.Context, tenantID, userID, tenantUserID string, location entities.DriverLocation) (json.RawMessage, error) {
+	if location.Latitude < -90 || location.Latitude > 90 || location.Longitude < -180 || location.Longitude > 180 ||
+		(location.AccuracyM != nil && (*location.AccuracyM < 0 || *location.AccuracyM > 1000)) {
+		return nil, ErrDriverAppInvalid
+	}
+	recordedAt, err := time.Parse(time.RFC3339, location.RecordedAt)
+	if err != nil || recordedAt.IsZero() || recordedAt.After(time.Now().Add(5*time.Minute)) || recordedAt.Before(time.Now().Add(-24*time.Hour)) {
+		return nil, ErrDriverAppInvalid
+	}
+	sample := map[string]any{
+		"lat": location.Latitude, "lon": location.Longitude,
+		"recorded_at": recordedAt.UTC().Format(time.RFC3339Nano), "source": "gps",
+	}
+	if location.AccuracyM != nil {
+		sample["accuracy_m"] = *location.AccuracyM
+	}
+	samples, err := json.Marshal([]map[string]any{sample})
+	if err != nil {
+		return nil, fmt.Errorf("encode driver location sample: %w", err)
+	}
+	return s.IngestTelemetry(ctx, tenantID, userID, tenantUserID, location.DeviceID, uuid.NewString(), samples, &recordedAt)
+}
+
+func (s *Service) IngestTelemetry(ctx context.Context, tenantID, userID, tenantUserID, deviceID, batchID string, samples json.RawMessage, clientCreatedAt *time.Time) (json.RawMessage, error) {
+	if s == nil || s.store == nil {
+		return nil, ErrDriverAppUnavailable
+	}
+	if uuid.Validate(deviceID) != nil || uuid.Validate(batchID) != nil || !json.Valid(samples) || len(bytes.TrimSpace(samples)) == 0 || bytes.TrimSpace(samples)[0] != '[' {
+		return nil, ErrDriverAppInvalid
+	}
+	var items []json.RawMessage
+	if err := json.Unmarshal(samples, &items); err != nil || len(items) == 0 {
+		return nil, ErrDriverAppInvalid
+	}
+	return s.store.IngestTelemetry(ctx, tenantID, userID, tenantUserID, deviceID, batchID, samples, clientCreatedAt)
 }
 
 func (s *Service) StartService(ctx context.Context, tenantID, userID, tenantUserID, serviceID string) (json.RawMessage, error) {

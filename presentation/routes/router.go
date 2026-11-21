@@ -171,6 +171,8 @@ func New(appContainer *container.Container) *gin.Engine {
 		protected.GET("/drivers/me/documents/:owner/:documentID/file", driverAppHandler.DocumentFile)
 		protected.GET("/drivers/me/day-summary", driverAppHandler.DaySummary)
 		protected.GET("/drivers/me/services", driverAppHandler.Services)
+		protected.POST("/drivers/me/location", driverAppHandler.UpdateLocation)
+		protected.POST("/drivers/me/telemetry", driverAppHandler.IngestTelemetry)
 		protected.POST("/drivers/me/services/:id/start", driverAppHandler.StartService)
 		protected.POST("/drivers/me/services/:id/finish", driverAppHandler.FinishService)
 	}
