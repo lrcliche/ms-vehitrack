@@ -9,6 +9,7 @@ import (
 	assignmentapp "ms-vehitrack/application/assignments"
 	"ms-vehitrack/application/businessauth"
 	"ms-vehitrack/application/config"
+	driverapp "ms-vehitrack/application/drivers"
 	"ms-vehitrack/application/enterprise"
 	"ms-vehitrack/application/geocoding"
 	"ms-vehitrack/application/packages"
@@ -22,6 +23,7 @@ import (
 	"ms-vehitrack/domain/ports"
 	"ms-vehitrack/infrastructure/cache"
 	"ms-vehitrack/infrastructure/database"
+	factraemail "ms-vehitrack/infrastructure/email"
 	gcpbigquery "ms-vehitrack/infrastructure/gcp/bigquery"
 	gcpconfig "ms-vehitrack/infrastructure/gcp/config"
 	gcppubsub "ms-vehitrack/infrastructure/gcp/pubsub"
@@ -71,6 +73,7 @@ type Container struct {
 	assignmentService     *assignmentapp.Service
 	serviceRequestService *servicerequests.Service
 	enterpriseService     *enterprise.Service
+	driverAppService      *driverapp.Service
 	businessAuthService   *businessauth.Service
 	trackingService       *tracking.Service
 	trafficQueryService   *trafficquery.Service
@@ -314,6 +317,17 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 	} else {
 		log.Printf("[CONTAINER] operation=enterprise-business status=disabled")
 	}
+	var driverAppService *driverapp.Service
+	if dbPool != nil {
+		var documentStorage ports.DriverAppDocumentStorage
+		if storageClient != nil {
+			documentStorage = stores.NewGCPDriverAppDocumentStorage(storageClient)
+		}
+		driverAppService = driverapp.NewService(repositories.NewPostgresDriverAppStore(dbPool), documentStorage)
+		log.Printf("[CONTAINER] operation=driver-app status=enabled")
+	} else {
+		log.Printf("[CONTAINER] operation=driver-app status=disabled")
+	}
 
 	// F6 — Ingesta por lote + viajes + sesiones OBD: store PG (tracking.*/device.* tenant-scoped).
 	var trackingService *tracking.Service
@@ -338,7 +352,8 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 	var businessAuthService *businessauth.Service
 	if dbPool != nil {
 		businessAuthService = businessauth.NewService(
-			repositories.NewPostgresBusinessAuthStore(dbPool), cfg.JWTSigningKey, cfg.JWTIssuer)
+			repositories.NewPostgresBusinessAuthStore(dbPool), cfg.JWTSigningKey, cfg.JWTIssuer,
+			factraemail.NewFactraClient(cfg.FactraEmailURL, cfg.FactraEmailAPIKey, cfg.FactraEmailEmpresaID))
 		log.Printf("[CONTAINER] operation=business-auth status=enabled")
 	} else {
 		log.Printf("[CONTAINER] operation=business-auth status=disabled")
@@ -370,6 +385,7 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 		assignmentService:       assignmentService,
 		serviceRequestService:   serviceRequestService,
 		enterpriseService:       enterpriseService,
+		driverAppService:        driverAppService,
 		trackingService:         trackingService,
 		trafficQueryService:     trafficQueryService,
 		businessAuthService:     businessAuthService,
@@ -585,6 +601,13 @@ func (c *Container) ResolveEnterpriseService() (*enterprise.Service, bool) {
 		return nil, false
 	}
 	return c.enterpriseService, true
+}
+
+func (c *Container) ResolveDriverAppService() (*driverapp.Service, bool) {
+	if c.driverAppService == nil {
+		return nil, false
+	}
+	return c.driverAppService, true
 }
 
 func (c *Container) ResolveBusinessAuthService() (*businessauth.Service, bool) {

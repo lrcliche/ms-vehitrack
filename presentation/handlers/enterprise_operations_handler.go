@@ -175,7 +175,7 @@ func (h *EnterpriseOperationsHandler) UpsertDriver(c *gin.Context) {
 		status = "disponible"
 	}
 	value, err := svc.UpsertDriver(c.Request.Context(), claims.TenantID, claims.Subject, claims.TenantUserID, entities.EnterpriseDriverCommand{
-		ID: id, FullName: req.FullName, IdentificationNumber: req.IdentificationNumber, Phone: req.Phone, LicenseNumber: req.LicenseNumber,
+		ID: id, TenantUserID: req.TenantUserID, FullName: req.FullName, IdentificationNumber: req.IdentificationNumber, Phone: req.Phone, LicenseNumber: req.LicenseNumber,
 		LicenseCategory: req.LicenseCategory, LicenseExpiresAt: expires, DailyAllowanceCOP: *req.DailyAllowanceCOP, Status: status})
 	if err != nil {
 		responses.ErrorFromApp(c, presentationerrors.Map(err))

@@ -51,6 +51,7 @@ func New(appContainer *container.Container) *gin.Engine {
 	enterpriseOperationsHandler := handlers.NewEnterpriseOperationsHandler(appContainer)
 	enterpriseRequestHandler := handlers.NewEnterpriseRequestHandler(appContainer)
 	businessAuthHandler := handlers.NewBusinessAuthHandler(appContainer)
+	driverAppHandler := handlers.NewDriverAppHandler(appContainer)
 	trackingHandler := handlers.NewTrackingHandler(appContainer)
 	trafficBBoxHandler := handlers.NewTrafficBBoxHandler(appContainer)
 
@@ -142,6 +143,10 @@ func New(appContainer *container.Container) *gin.Engine {
 	{
 		v2.POST("/auth/login",
 			middleware.IPRateLimit(cfg.RegisterRateRPS, cfg.RegisterRateBurst), businessAuthHandler.Login)
+		v2.POST("/auth/refresh", middleware.IPRateLimit(cfg.RegisterRateRPS, cfg.RegisterRateBurst), businessAuthHandler.Refresh)
+		v2.POST("/auth/logout", businessAuthHandler.Logout)
+		v2.POST("/auth/password/forgot", middleware.IPRateLimit(cfg.RegisterRateRPS, cfg.RegisterRateBurst), businessAuthHandler.RequestPasswordReset)
+		v2.POST("/auth/password/reset", middleware.IPRateLimit(cfg.RegisterRateRPS, cfg.RegisterRateBurst), businessAuthHandler.ConfirmPasswordReset)
 
 		protected := v2.Group("")
 		protected.Use(middleware.BusinessJWTAuth(cfg.JWTSigningKey, cfg.JWTIssuer))
@@ -165,6 +170,17 @@ func New(appContainer *container.Container) *gin.Engine {
 		protected.POST("/enterprise/trips/:assignmentID/close-expenses", enterpriseOperationsHandler.CloseTripExpenses)
 		protected.GET("/enterprise/reports/profitability", enterpriseOperationsHandler.ProfitabilityReport)
 		protected.POST("/auth/users", businessAuthHandler.CreateUser)
+		protected.GET("/drivers/me", driverAppHandler.Profile)
+		protected.GET("/drivers/me/documents", driverAppHandler.Documents)
+		protected.GET("/drivers/me/documents/:owner/:documentID/file", driverAppHandler.DocumentFile)
+		protected.GET("/drivers/me/day-summary", driverAppHandler.DaySummary)
+		protected.GET("/drivers/me/services", driverAppHandler.Services)
+		protected.POST("/drivers/me/devices/attach", driverAppHandler.AttachDevice)
+		protected.POST("/drivers/me/devices/detach", driverAppHandler.DetachDevice)
+		protected.POST("/drivers/me/location", driverAppHandler.UpdateLocation)
+		protected.POST("/drivers/me/telemetry", driverAppHandler.IngestTelemetry)
+		protected.POST("/drivers/me/services/:id/start", driverAppHandler.StartService)
+		protected.POST("/drivers/me/services/:id/finish", driverAppHandler.FinishService)
 	}
 
 	return engine

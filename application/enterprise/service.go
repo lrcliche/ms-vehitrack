@@ -56,6 +56,16 @@ func (s *Service) UpdateVehicleStatus(ctx context.Context, tenantID, actorID, te
 }
 func (s *Service) UpsertDriver(ctx context.Context, tenantID, actorID, tenantUserID string, value entities.EnterpriseDriverCommand) (*entities.EnterpriseDriver, error) {
 	value.FullName = strings.TrimSpace(value.FullName)
+	if value.TenantUserID != nil {
+		id := strings.TrimSpace(*value.TenantUserID)
+		if id == "" {
+			value.TenantUserID = nil
+		} else if !validID(id) {
+			return nil, entities.ErrEnterpriseInvalid
+		} else {
+			value.TenantUserID = &id
+		}
+	}
 	if value.FullName == "" || len(value.FullName) > 200 || value.DailyAllowanceCOP < 0 || (value.ID != "" && !validID(value.ID)) ||
 		(value.Status != "" && !oneOf(value.Status, "disponible", "descanso", "inactivo")) {
 		return nil, entities.ErrEnterpriseInvalid

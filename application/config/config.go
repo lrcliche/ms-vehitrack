@@ -19,6 +19,9 @@ type Config struct {
 	ShutdownTimeoutSeconds   int
 	MaxBodyBytes             int64
 	APIKey                   string
+	FactraEmailURL           string
+	FactraEmailAPIKey        string
+	FactraEmailEmpresaID     string
 	JWTSigningKey            string
 	JWTIssuer                string
 	RateLimitRPS             float64
@@ -64,6 +67,9 @@ func MustLoad() Config {
 		ShutdownTimeoutSeconds:   getEnvAsInt("SHUTDOWN_TIMEOUT_SECONDS", 10),
 		MaxBodyBytes:             int64(getEnvAsInt("MAX_BODY_BYTES", 65536)),
 		APIKey:                   os.Getenv("API_KEY"),
+		FactraEmailURL:           os.Getenv("FACTRA_EMAIL_URL"),
+		FactraEmailAPIKey:        os.Getenv("FACTRA_EMAIL_API_KEY"),
+		FactraEmailEmpresaID:     os.Getenv("FACTRA_EMAIL_EMPRESA_ID"),
 		JWTSigningKey:            os.Getenv("JWT_SIGNING_KEY"),
 		JWTIssuer:                getEnv("JWT_ISSUER", "ms-vehitrack"),
 		RateLimitRPS:             getEnvAsFloat("RATE_LIMIT_RPS", 20),

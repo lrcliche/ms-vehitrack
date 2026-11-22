@@ -66,7 +66,8 @@ func (s *PostgresEnterpriseStore) UpsertDriver(ctx context.Context, tenantID, ac
 		expires = value.LicenseExpiresAt.Format("2006-01-02")
 	}
 	payload, err := json.Marshal(map[string]any{"id": value.ID, "nombre_completo": value.FullName, "numero_identificacion": value.IdentificationNumber,
-		"telefono": value.Phone, "numero_licencia": value.LicenseNumber, "categoria_licencia": value.LicenseCategory,
+		"tenant_user_id": value.TenantUserID,
+		"telefono":       value.Phone, "numero_licencia": value.LicenseNumber, "categoria_licencia": value.LicenseCategory,
 		"vencimiento_licencia": expires, "viatico_diario": value.DailyAllowanceCOP, "estado": value.Status})
 	if err != nil {
 		return nil, fmt.Errorf("encode enterprise driver: %w", err)

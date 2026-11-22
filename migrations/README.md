@@ -31,6 +31,11 @@ psql "$POSTGRES_DSN" -f migrations/013_business_jwt_routes.sql
 psql "$POSTGRES_DSN" -f migrations/014_business_assignment_candidates.sql
 psql "$POSTGRES_DSN" -f migrations/015_business_service_requests_api.sql
 psql "$POSTGRES_DSN" -f migrations/016_business_enterprise_operations.sql
+psql "$POSTGRES_DSN" -f migrations/017_driver_app_self_service.sql
+psql "$POSTGRES_DSN" -f migrations/018_driver_service_transitions.sql
+psql "$POSTGRES_DSN" -f migrations/019_enterprise_driver_user_link.sql
+psql "$POSTGRES_DSN" -f migrations/020_driver_services_contact_order.sql
+psql "$POSTGRES_DSN" -f migrations/021_driver_app_jwt_location.sql
 ```
 
 La `014` entrega los candidatos de asignación con datos del vehículo, conductor, ubicación y
@@ -42,6 +47,44 @@ La `016` implementa lecturas y operaciones empresariales (dashboard, flota, cond
 solicitudes, asignaciones, cierre de gastos y rentabilidad) para `/api/v2/enterprise`. Las
 operaciones requieren JWT v2, las rutinas comprueban tenant/permisos y la API no consulta tablas
 empresariales directamente. Requiere los roles PostgreSQL `vehitrack_owner` y `vehitrack_app`.
+
+La `017` agrega las lecturas autenticadas del App Driver (`/api/v2/drivers/me/*`). El conductor
+se identifica por el `tenant_user_id` del JWT vinculado en `business.driver`; la API llama solo
+funciones `business.fnc_*`. Los adjuntos se descargan por una ruta JWT protegida y no se exponen
+claves de almacenamiento. La fecha del resumen usa `America/Bogota` y los documentos vencen
+pronto dentro de 30 días. El esquema actual no tiene foto de conductor ni código comercial de
+solicitud: `foto_url` devuelve `null` y `codigo` es una referencia estable derivada del UUID.
+
+La `018` agrega las transiciones autenticadas `POST /api/v2/drivers/me/services/{id}/start` y
+`POST /api/v2/drivers/me/services/{id}/finish`. El `{id}` es el ID de la solicitud devuelto por
+`GET /drivers/me/services`; ambas funciones derivan al conductor del JWT y verifican tenant,
+asignación confirmada y estado antes de actualizar la ejecución. `finish` marca la solicitud como
+completada y libera conductor y vehículo; los gastos y kilometraje real siguen siendo un cierre
+administrativo separado y no se inventan desde la app del conductor.
+
+La `019` permite enviar `tenant_user_id` opcional al crear o actualizar un conductor desde
+`/api/v2/enterprise/drivers`. La rutina comprueba que la cuenta esté activa en el mismo tenant,
+tenga el rol `driver` y no esté vinculada a otro conductor. Omitir el campo conserva el vínculo
+actual; la respuesta y el listado informan `usuario_vinculado`.
+
+La `020` corrige la selección del contacto de servicio: `business.customer_contact` no tiene una
+columna `is_primary`, así que el ordenamiento usa el ID del contacto y evita un error SQL al leer
+los servicios del conductor.
+
+La `021` agrega `POST /api/v2/drivers/me/telemetry`, autenticado con JWT de conductor y `X-Device-Id`,
+con el mismo body de batch que v1. En su primera versión validaba el vínculo del dispositivo del
+vehículo; la `024` cambia esa validación para el teléfono de la app y conserva `vehicle_device`
+para el tracker instalado en el vehículo. Guarda las muestras en `tracking.position` y actualiza la
+posición actual del conductor en `business.driver_location` con la muestra reciente y precisa.
+Las recomendaciones usan esa posición si tiene máximo diez minutos y precisión de hasta 100 m;
+si no, usan la última posición del dispositivo del vehículo. `POST /api/v1/telemetry/batch`
+permanece disponible sin cambios y sigue guardando historial por dispositivo.
+
+La `024` agrega `business.driver_device` con historial de vínculos teléfono↔conductor, más
+`POST /api/v2/drivers/me/devices/attach|detach`. La app registra el teléfono por v1 y lo vincula
+automáticamente al restaurar/iniciar sesión; al cerrar sesión se cierra el vínculo. Un mismo
+conductor puede tener varios teléfonos vinculados. Un teléfono no se puede vincular a más de un
+conductor activo ni se puede usar como dispositivo del vehículo mientras tenga ese vínculo.
 
 Las `001`–`004` son el paquete geoespacial canónico. La `005` formaliza las tablas planas
 `traffic_batches/samples/aggregates` que el repositorio Go (`postgres_traffic_store.go`) ya

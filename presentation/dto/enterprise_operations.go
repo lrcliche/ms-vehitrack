@@ -27,6 +27,7 @@ type EnterpriseVehicleStatusRequest struct {
 	Reason string `json:"motivo" binding:"omitempty,max=500"`
 }
 type EnterpriseDriverRequest struct {
+	TenantUserID         *string  `json:"tenant_user_id" binding:"omitempty,uuid"`
 	FullName             string   `json:"nombre_completo" binding:"required,min=1,max=200"`
 	IdentificationNumber *string  `json:"numero_identificacion" binding:"omitempty,max=50"`
 	Phone                *string  `json:"telefono" binding:"omitempty,max=40"`
