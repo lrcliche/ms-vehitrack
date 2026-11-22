@@ -72,12 +72,19 @@ columna `is_primary`, así que el ordenamiento usa el ID del contacto y evita un
 los servicios del conductor.
 
 La `021` agrega `POST /api/v2/drivers/me/telemetry`, autenticado con JWT de conductor y `X-Device-Id`,
-con el mismo body de batch que v1. En una sola transacción valida que el dispositivo activo esté
-vinculado al vehículo del conductor, guarda las muestras en `tracking.position` y actualiza la
+con el mismo body de batch que v1. En su primera versión validaba el vínculo del dispositivo del
+vehículo; la `024` cambia esa validación para el teléfono de la app y conserva `vehicle_device`
+para el tracker instalado en el vehículo. Guarda las muestras en `tracking.position` y actualiza la
 posición actual del conductor en `business.driver_location` con la muestra reciente y precisa.
 Las recomendaciones usan esa posición si tiene máximo diez minutos y precisión de hasta 100 m;
 si no, usan la última posición del dispositivo del vehículo. `POST /api/v1/telemetry/batch`
 permanece disponible sin cambios y sigue guardando historial por dispositivo.
+
+La `024` agrega `business.driver_device` con historial de vínculos teléfono↔conductor, más
+`POST /api/v2/drivers/me/devices/attach|detach`. La app registra el teléfono por v1 y lo vincula
+automáticamente al restaurar/iniciar sesión; al cerrar sesión se cierra el vínculo. Un mismo
+conductor puede tener varios teléfonos vinculados. Un teléfono no se puede vincular a más de un
+conductor activo ni se puede usar como dispositivo del vehículo mientras tenga ese vínculo.
 
 Las `001`–`004` son el paquete geoespacial canónico. La `005` formaliza las tablas planas
 `traffic_batches/samples/aggregates` que el repositorio Go (`postgres_traffic_store.go`) ya

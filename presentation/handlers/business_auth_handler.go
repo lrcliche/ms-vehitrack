@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -20,6 +21,94 @@ type BusinessAuthServiceResolver interface {
 
 type BusinessAuthHandler struct {
 	resolver BusinessAuthServiceResolver
+}
+
+type refreshRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
+func (h *BusinessAuthHandler) RequestPasswordReset(c *gin.Context) {
+	var req dto.BusinessPasswordResetRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		responses.ErrorFromApp(c, presentationerrors.BadRequest("invalid password recovery request"))
+		return
+	}
+	svc, ok := h.resolver.ResolveBusinessAuthService()
+	if !ok {
+		responses.Error(c, http.StatusServiceUnavailable, "auth-unavailable", "business authentication is not configured")
+		return
+	}
+	if err := svc.RequestPasswordReset(c.Request.Context(), req.Email, req.TenantID); err != nil {
+		log.Printf("[AUTH] password recovery processing failed: %v", err)
+	}
+	responses.Success(c, http.StatusAccepted, gin.H{"message": "If the account exists, password recovery instructions will be sent."})
+}
+
+func (h *BusinessAuthHandler) ConfirmPasswordReset(c *gin.Context) {
+	var req dto.BusinessPasswordResetConfirmRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		responses.ErrorFromApp(c, presentationerrors.BadRequest("invalid password reset request"))
+		return
+	}
+	svc, ok := h.resolver.ResolveBusinessAuthService()
+	if !ok {
+		responses.Error(c, http.StatusServiceUnavailable, "auth-unavailable", "business authentication is not configured")
+		return
+	}
+	if err := svc.ResetPassword(c.Request.Context(), req.TenantID, req.Token, req.NewPassword); err != nil {
+		if errors.Is(err, businessauth.ErrInvalidPasswordResetToken) {
+			responses.Error(c, http.StatusBadRequest, "invalid-reset-token", "The reset code is invalid or expired")
+			return
+		}
+		responses.Error(c, http.StatusInternalServerError, "internal-server-error", "Password reset failed")
+		return
+	}
+	responses.Success(c, http.StatusOK, gin.H{"message": "Password updated. Please sign in again."})
+}
+
+func (h *BusinessAuthHandler) Refresh(c *gin.Context) {
+	var req refreshRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		responses.ErrorFromApp(c, presentationerrors.BadRequest("invalid refresh request"))
+		return
+	}
+	svc, ok := h.resolver.ResolveBusinessAuthService()
+	if !ok {
+		responses.Error(c, http.StatusServiceUnavailable, "auth-unavailable", "business authentication is not configured")
+		return
+	}
+	result, err := svc.Refresh(c.Request.Context(), req.RefreshToken)
+	if err != nil {
+		if errors.Is(err, entities.ErrInvalidBusinessCredentials) {
+			responses.Error(c, http.StatusUnauthorized, "unauthorized", "Invalid refresh token")
+		} else {
+			responses.Error(c, http.StatusInternalServerError, "internal-server-error", "Token refresh failed")
+		}
+		return
+	}
+	writeTokenResponse(c, result)
+}
+
+func writeTokenResponse(c *gin.Context, result *businessauth.LoginResult) {
+	responses.Success(c, http.StatusOK, gin.H{"access_token": result.AccessToken, "token_type": "Bearer", "expires_in": result.ExpiresIn, "refresh_token": result.RefreshToken, "refresh_expires_in": result.RefreshExpiresIn, "user": gin.H{"id": result.UserID, "tenant_id": result.TenantID}})
+}
+
+func (h *BusinessAuthHandler) Logout(c *gin.Context) {
+	var req refreshRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		responses.ErrorFromApp(c, presentationerrors.BadRequest("invalid logout request"))
+		return
+	}
+	svc, ok := h.resolver.ResolveBusinessAuthService()
+	if !ok {
+		responses.Error(c, http.StatusServiceUnavailable, "auth-unavailable", "business authentication is not configured")
+		return
+	}
+	if err := svc.Logout(c.Request.Context(), req.RefreshToken); err != nil {
+		responses.Error(c, http.StatusInternalServerError, "internal-server-error", "Logout failed")
+		return
+	}
+	responses.Success(c, http.StatusOK, gin.H{"revoked": true})
 }
 
 func NewBusinessAuthHandler(resolver BusinessAuthServiceResolver) *BusinessAuthHandler {
@@ -49,15 +138,7 @@ func (h *BusinessAuthHandler) Login(c *gin.Context) {
 		}
 		return
 	}
-	responses.Success(c, http.StatusOK, gin.H{
-		"access_token": result.AccessToken,
-		"token_type":   "Bearer",
-		"expires_in":   result.ExpiresIn,
-		"user": gin.H{
-			"id":        result.UserID,
-			"tenant_id": result.TenantID,
-		},
-	})
+	writeTokenResponse(c, result)
 }
 
 func (h *BusinessAuthHandler) CreateUser(c *gin.Context) {

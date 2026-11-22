@@ -3,6 +3,7 @@ package businessauth
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
 	"errors"
@@ -20,18 +21,21 @@ import (
 )
 
 const (
-	accessTokenTTL = 15 * time.Minute
-	tokenAudience  = "vehitrack-api-v2"
-	minimumKeySize = 32
+	accessTokenTTL  = 15 * time.Minute
+	refreshTokenTTL = 30 * 24 * time.Hour
+	tokenAudience   = "vehitrack-api-v2"
+	minimumKeySize  = 32
 )
 
 var ErrTokenServiceUnavailable = errors.New("business auth: token service is not configured")
+var ErrInvalidPasswordResetToken = errors.New("business auth: invalid or expired password reset token")
 
 type Service struct {
-	store    ports.BusinessAuthStore
-	key      []byte
-	issuer   string
-	keyReady bool
+	store       ports.BusinessAuthStore
+	emailSender ports.EmailSender
+	key         []byte
+	issuer      string
+	keyReady    bool
 }
 
 type TokenClaims struct {
@@ -41,15 +45,81 @@ type TokenClaims struct {
 }
 
 type LoginResult struct {
-	AccessToken string
-	ExpiresIn   int64
-	UserID      string
-	TenantID    string
+	AccessToken      string
+	RefreshToken     string
+	ExpiresIn        int64
+	RefreshExpiresIn int64
+	UserID           string
+	TenantID         string
 }
 
-func NewService(store ports.BusinessAuthStore, signingKey, issuer string) *Service {
+func NewService(store ports.BusinessAuthStore, signingKey, issuer string, emailSenders ...ports.EmailSender) *Service {
 	key := []byte(signingKey)
-	return &Service{store: store, key: key, issuer: issuer, keyReady: len(key) >= minimumKeySize && issuer != ""}
+	var emailSender ports.EmailSender
+	if len(emailSenders) > 0 {
+		emailSender = emailSenders[0]
+	}
+	return &Service{store: store, emailSender: emailSender, key: key, issuer: issuer, keyReady: len(key) >= minimumKeySize && issuer != ""}
+}
+
+func (s *Service) RequestPasswordReset(ctx context.Context, email, tenantID string) error {
+	if s.store == nil || s.emailSender == nil {
+		return ErrTokenServiceUnavailable
+	}
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email == "" || len(email) > 320 || uuid.Validate(tenantID) != nil {
+		return entities.ErrInvalidBusinessCredentials
+	}
+	credential, err := s.store.FindActiveCredential(ctx, email, tenantID)
+	if err != nil {
+		return fmt.Errorf("find password reset account: %w", err)
+	}
+	if credential == nil {
+		return nil
+	}
+	raw, err := secureRandomToken()
+	if err != nil {
+		return fmt.Errorf("generate password reset token: %w", err)
+	}
+	expiresAt := time.Now().UTC().Add(30 * time.Minute)
+	hash := hashRefreshToken(raw)
+	if err := s.store.CreatePasswordResetToken(ctx, credential.UserID, credential.TenantUserID, credential.TenantID, hash, expiresAt); err != nil {
+		return fmt.Errorf("store password reset token: %w", err)
+	}
+	msg := buildPasswordResetEmail(credential.Email, raw, expiresAt)
+	if err := s.emailSender.Send(ctx, msg); err != nil {
+		return fmt.Errorf("send password reset email: %w", err)
+	}
+	return nil
+}
+
+func (s *Service) ResetPassword(ctx context.Context, tenantID, rawToken, password string) error {
+	if s.store == nil {
+		return ErrTokenServiceUnavailable
+	}
+	if uuid.Validate(tenantID) != nil || len(rawToken) < 32 || len(rawToken) > 256 || len(password) < 12 || len(password) > 72 {
+		return ErrInvalidPasswordResetToken
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hash reset password: %w", err)
+	}
+	used, err := s.store.ConsumePasswordResetToken(ctx, tenantID, hashRefreshToken(rawToken), string(hash))
+	if err != nil {
+		return fmt.Errorf("consume password reset token: %w", err)
+	}
+	if !used {
+		return ErrInvalidPasswordResetToken
+	}
+	return nil
+}
+
+func secureRandomToken() (string, error) {
+	var b [32]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b[:]), nil
 }
 
 func (s *Service) Login(ctx context.Context, email, password, tenantID string) (*LoginResult, error) {
@@ -70,33 +140,76 @@ func (s *Service) Login(ctx context.Context, email, password, tenantID string) (
 		return nil, entities.ErrInvalidBusinessCredentials
 	}
 
-	now := time.Now().UTC()
-	claims := TokenClaims{
-		Claims: jwt.Claims{
-			Issuer:   s.issuer,
-			Subject:  credential.UserID,
-			Audience: jwt.Audience{tokenAudience},
-			IssuedAt: jwt.NewNumericDate(now),
-			Expiry:   jwt.NewNumericDate(now.Add(accessTokenTTL)),
-			ID:       randomTokenID(),
-		},
-		TenantID:     credential.TenantID,
-		TenantUserID: credential.TenantUserID,
+	return s.issueSession(ctx, credential, "")
+}
+
+func (s *Service) issueSession(ctx context.Context, credential *entities.BusinessUserCredential, refresh string) (*LoginResult, error) {
+	if refresh == "" {
+		refresh = randomRefreshToken()
+		familyID := uuid.NewString()
+		if err := s.store.CreateRefreshToken(ctx, credential.UserID, credential.TenantUserID, credential.TenantID, hashRefreshToken(refresh), familyID, time.Now().UTC().Add(refreshTokenTTL)); err != nil {
+			return nil, fmt.Errorf("create refresh token: %w", err)
+		}
 	}
+	access, err := s.signAccessToken(credential)
+	if err != nil {
+		return nil, err
+	}
+	return &LoginResult{AccessToken: access, RefreshToken: refresh, ExpiresIn: int64(accessTokenTTL.Seconds()), RefreshExpiresIn: int64(refreshTokenTTL.Seconds()), UserID: credential.UserID, TenantID: credential.TenantID}, nil
+}
+
+func (s *Service) Refresh(ctx context.Context, raw string) (*LoginResult, error) {
+	if !s.keyReady || s.store == nil {
+		return nil, ErrTokenServiceUnavailable
+	}
+	if len(raw) < 32 || len(raw) > 256 {
+		return nil, entities.ErrInvalidBusinessCredentials
+	}
+	next := randomRefreshToken()
+	credential, err := s.store.RotateRefreshToken(ctx, hashRefreshToken(raw), hashRefreshToken(next), time.Now().UTC().Add(refreshTokenTTL))
+	if err != nil {
+		return nil, fmt.Errorf("rotate refresh token: %w", err)
+	}
+	if credential == nil {
+		return nil, entities.ErrInvalidBusinessCredentials
+	}
+	return s.issueSession(ctx, credential, next)
+}
+
+func (s *Service) Logout(ctx context.Context, raw string) error {
+	if s.store == nil {
+		return ErrTokenServiceUnavailable
+	}
+	if raw == "" {
+		return entities.ErrInvalidBusinessCredentials
+	}
+	return s.store.RevokeRefreshToken(ctx, hashRefreshToken(raw))
+}
+
+func (s *Service) signAccessToken(credential *entities.BusinessUserCredential) (string, error) {
+	now := time.Now().UTC()
+	claims := TokenClaims{Claims: jwt.Claims{Issuer: s.issuer, Subject: credential.UserID, Audience: jwt.Audience{tokenAudience}, IssuedAt: jwt.NewNumericDate(now), Expiry: jwt.NewNumericDate(now.Add(accessTokenTTL)), ID: randomTokenID()}, TenantID: credential.TenantID, TenantUserID: credential.TenantUserID}
 	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.HS256, Key: s.key}, nil)
 	if err != nil {
-		return nil, fmt.Errorf("create jwt signer: %w", err)
+		return "", fmt.Errorf("create jwt signer: %w", err)
 	}
 	token, err := jwt.Signed(signer).Claims(claims).Serialize()
 	if err != nil {
-		return nil, fmt.Errorf("sign access token: %w", err)
+		return "", fmt.Errorf("sign access token: %w", err)
 	}
-	return &LoginResult{
-		AccessToken: token,
-		ExpiresIn:   int64(accessTokenTTL.Seconds()),
-		UserID:      credential.UserID,
-		TenantID:    credential.TenantID,
-	}, nil
+	return token, nil
+}
+
+func randomRefreshToken() string {
+	var b [32]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		panic("secure random source unavailable")
+	}
+	return base64.RawURLEncoding.EncodeToString(b[:])
+}
+func hashRefreshToken(raw string) string {
+	sum := sha256.Sum256([]byte(raw))
+	return fmt.Sprintf("%x", sum[:])
 }
 
 func (s *Service) CreateUser(

@@ -141,6 +141,42 @@ func (h *DriverAppHandler) IngestTelemetry(c *gin.Context) {
 	responses.Success(c, http.StatusAccepted, result)
 }
 
+func (h *DriverAppHandler) AttachDevice(c *gin.Context) {
+	claims, service, ok := h.context(c)
+	if !ok {
+		return
+	}
+	deviceID := c.GetHeader(middleware.DeviceIDHeader)
+	if deviceID == "" {
+		responses.Error(c, http.StatusBadRequest, "invalid-request", "missing X-Device-Id")
+		return
+	}
+	result, err := service.AttachDevice(c.Request.Context(), claims.TenantID, claims.Subject, claims.TenantUserID, deviceID)
+	if err != nil {
+		h.respondError(c, err)
+		return
+	}
+	responses.Success(c, http.StatusOK, result)
+}
+
+func (h *DriverAppHandler) DetachDevice(c *gin.Context) {
+	claims, service, ok := h.context(c)
+	if !ok {
+		return
+	}
+	deviceID := c.GetHeader(middleware.DeviceIDHeader)
+	if deviceID == "" {
+		responses.Error(c, http.StatusBadRequest, "invalid-request", "missing X-Device-Id")
+		return
+	}
+	result, err := service.DetachDevice(c.Request.Context(), claims.TenantID, claims.Subject, claims.TenantUserID, deviceID)
+	if err != nil {
+		h.respondError(c, err)
+		return
+	}
+	responses.Success(c, http.StatusOK, result)
+}
+
 func (h *DriverAppHandler) StartService(c *gin.Context) {
 	h.transitionService(c, true)
 }

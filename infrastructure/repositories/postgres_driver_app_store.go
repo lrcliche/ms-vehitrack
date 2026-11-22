@@ -39,6 +39,14 @@ func (s *PostgresDriverAppStore) IngestTelemetry(ctx context.Context, tenantID, 
 		tenantID, userID, tenantUserID, deviceID, batchID, samples, clientCreatedAt)
 }
 
+func (s *PostgresDriverAppStore) AttachDevice(ctx context.Context, tenantID, userID, tenantUserID, deviceID string) (json.RawMessage, error) {
+	return s.function(ctx, tenantID, `SELECT business.fnc_driver_me_attach_device($1::uuid,$2::uuid,$3::uuid,$4::uuid)`, tenantID, userID, tenantUserID, deviceID)
+}
+
+func (s *PostgresDriverAppStore) DetachDevice(ctx context.Context, tenantID, userID, tenantUserID, deviceID string) (json.RawMessage, error) {
+	return s.function(ctx, tenantID, `SELECT business.fnc_driver_me_detach_device($1::uuid,$2::uuid,$3::uuid,$4::uuid)`, tenantID, userID, tenantUserID, deviceID)
+}
+
 func (s *PostgresDriverAppStore) StartService(ctx context.Context, tenantID, userID, tenantUserID, serviceID string) (json.RawMessage, error) {
 	return s.function(ctx, tenantID, `SELECT business.fnc_driver_me_service_start($1::uuid,$2::uuid,$3::uuid,$4::uuid)`, tenantID, userID, tenantUserID, serviceID)
 }

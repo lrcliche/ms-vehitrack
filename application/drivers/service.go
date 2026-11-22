@@ -102,6 +102,26 @@ func (s *Service) IngestTelemetry(ctx context.Context, tenantID, userID, tenantU
 	return s.store.IngestTelemetry(ctx, tenantID, userID, tenantUserID, deviceID, batchID, samples, clientCreatedAt)
 }
 
+func (s *Service) AttachDevice(ctx context.Context, tenantID, userID, tenantUserID, deviceID string) (json.RawMessage, error) {
+	if s == nil || s.store == nil {
+		return nil, ErrDriverAppUnavailable
+	}
+	if uuid.Validate(deviceID) != nil {
+		return nil, ErrDriverAppInvalid
+	}
+	return s.store.AttachDevice(ctx, tenantID, userID, tenantUserID, deviceID)
+}
+
+func (s *Service) DetachDevice(ctx context.Context, tenantID, userID, tenantUserID, deviceID string) (json.RawMessage, error) {
+	if s == nil || s.store == nil {
+		return nil, ErrDriverAppUnavailable
+	}
+	if uuid.Validate(deviceID) != nil {
+		return nil, ErrDriverAppInvalid
+	}
+	return s.store.DetachDevice(ctx, tenantID, userID, tenantUserID, deviceID)
+}
+
 func (s *Service) StartService(ctx context.Context, tenantID, userID, tenantUserID, serviceID string) (json.RawMessage, error) {
 	if s == nil || s.store == nil {
 		return nil, ErrDriverAppUnavailable

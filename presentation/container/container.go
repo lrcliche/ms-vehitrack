@@ -23,6 +23,7 @@ import (
 	"ms-vehitrack/domain/ports"
 	"ms-vehitrack/infrastructure/cache"
 	"ms-vehitrack/infrastructure/database"
+	factraemail "ms-vehitrack/infrastructure/email"
 	gcpbigquery "ms-vehitrack/infrastructure/gcp/bigquery"
 	gcpconfig "ms-vehitrack/infrastructure/gcp/config"
 	gcppubsub "ms-vehitrack/infrastructure/gcp/pubsub"
@@ -351,7 +352,8 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 	var businessAuthService *businessauth.Service
 	if dbPool != nil {
 		businessAuthService = businessauth.NewService(
-			repositories.NewPostgresBusinessAuthStore(dbPool), cfg.JWTSigningKey, cfg.JWTIssuer)
+			repositories.NewPostgresBusinessAuthStore(dbPool), cfg.JWTSigningKey, cfg.JWTIssuer,
+			factraemail.NewFactraClient(cfg.FactraEmailURL, cfg.FactraEmailAPIKey, cfg.FactraEmailEmpresaID))
 		log.Printf("[CONTAINER] operation=business-auth status=enabled")
 	} else {
 		log.Printf("[CONTAINER] operation=business-auth status=disabled")
