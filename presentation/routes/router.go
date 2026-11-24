@@ -20,6 +20,7 @@ func New(appContainer *container.Container) *gin.Engine {
 	}
 
 	engine := gin.New()
+	engine.Use(middleware.CORS())
 	engine.Use(middleware.Recovery())
 	engine.Use(middleware.SecurityHeaders())
 	engine.Use(middleware.HTTPTrace())
@@ -168,6 +169,7 @@ func New(appContainer *container.Container) *gin.Engine {
 		protected.GET("/enterprise/requests/:serviceRequestID/recommendations", assignmentHandler.Recommendations)
 		protected.POST("/enterprise/assignments", assignmentHandler.Confirm)
 		protected.POST("/enterprise/trips/:assignmentID/close-expenses", enterpriseOperationsHandler.CloseTripExpenses)
+		protected.GET("/enterprise/trips", enterpriseOperationsHandler.ListTrips)
 		protected.GET("/enterprise/reports/profitability", enterpriseOperationsHandler.ProfitabilityReport)
 		protected.POST("/auth/users", businessAuthHandler.CreateUser)
 		protected.GET("/drivers/me", driverAppHandler.Profile)

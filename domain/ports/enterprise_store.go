@@ -19,5 +19,6 @@ type EnterpriseStore interface {
 	ListServiceRequests(ctx context.Context, tenantID, actorUserID, tenantUserID string, filter entities.EnterpriseServiceRequestFilter) (*entities.EnterprisePage[entities.EnterpriseServiceRequest], error)
 	ChangeServiceRequestStatus(ctx context.Context, tenantID, actorUserID, tenantUserID string, command entities.EnterpriseRequestStatusCommand) (*entities.EnterpriseServiceRequest, error)
 	CloseTripExpenses(ctx context.Context, tenantID, actorUserID, tenantUserID string, command entities.EnterpriseTripCloseCommand) (*entities.EnterpriseTripCloseResult, error)
+	ListTrips(ctx context.Context, tenantID, actorUserID, tenantUserID string, filter entities.EnterpriseTripFilter) (*entities.EnterprisePage[entities.EnterpriseTrip], error)
 	ProfitabilityReport(ctx context.Context, tenantID, actorUserID, tenantUserID string, filter entities.EnterpriseProfitabilityFilter) (*entities.EnterpriseProfitabilityReport, error)
 }

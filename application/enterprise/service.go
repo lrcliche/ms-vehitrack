@@ -108,6 +108,14 @@ func (s *Service) CloseTripExpenses(ctx context.Context, tenantID, actorID, tena
 	}
 	return s.store.CloseTripExpenses(ctx, tenantID, actorID, tenantUserID, command)
 }
+func (s *Service) ListTrips(ctx context.Context, tenantID, actorID, tenantUserID string, filter entities.EnterpriseTripFilter) (*entities.EnterprisePage[entities.EnterpriseTrip], error) {
+	if (filter.From == nil) != (filter.To == nil) || (filter.From != nil && filter.To.Before(*filter.From)) ||
+		(filter.Status != "" && !oneOf(filter.Status, "en_curso", "finalizado")) {
+		return nil, entities.ErrEnterpriseInvalid
+	}
+	pageDefaults(&filter.Page, &filter.Limit)
+	return s.store.ListTrips(ctx, tenantID, actorID, tenantUserID, filter)
+}
 func (s *Service) ProfitabilityReport(ctx context.Context, tenantID, actorID, tenantUserID string, filter entities.EnterpriseProfitabilityFilter) (*entities.EnterpriseProfitabilityReport, error) {
 	if filter.From.IsZero() || filter.To.IsZero() || filter.To.Before(filter.From) || (filter.VehicleID != "" && !validID(filter.VehicleID)) || (filter.DriverID != "" && !validID(filter.DriverID)) {
 		return nil, entities.ErrEnterpriseInvalid

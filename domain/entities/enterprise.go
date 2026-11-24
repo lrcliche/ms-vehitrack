@@ -188,6 +188,47 @@ type EnterpriseTripCloseResult struct {
 	ActualMarginPercentage float64 `json:"porcentaje_margen_real"`
 }
 
+type EnterpriseTripFilter struct {
+	From   *time.Time
+	To     *time.Time
+	Status string
+	Page   int
+	Limit  int
+}
+
+type EnterpriseTripExpenses struct {
+	FuelCOP        float64 `json:"costo_combustible"`
+	TollsCOP       float64 `json:"costo_peajes"`
+	MaintenanceCOP float64 `json:"costo_mantenimiento"`
+	DriverCOP      float64 `json:"costo_conductor"`
+	OtherCOP       float64 `json:"otros_gastos"`
+}
+
+type EnterpriseTrip struct {
+	ID                 string                  `json:"id"`
+	Code               string                  `json:"codigo"`
+	AssignmentID       string                  `json:"asignacion_id"`
+	RequestCode        string                  `json:"solicitud_codigo"`
+	Origin             string                  `json:"origen"`
+	Destination        string                  `json:"destino"`
+	VehicleID          string                  `json:"vehiculo_id"`
+	Plate              string                  `json:"placa"`
+	DriverID           string                  `json:"conductor_id"`
+	DriverCode         string                  `json:"conductor_codigo"`
+	DriverName         string                  `json:"conductor_nombre"`
+	Status             string                  `json:"estado"`
+	StartedAt          *time.Time              `json:"fecha_inicio"`
+	EndedAt            *time.Time              `json:"fecha_fin"`
+	AgreedFareCOP      float64                 `json:"tarifa_pactada"`
+	EstimatedCostCOP   float64                 `json:"costo_estimado"`
+	EstimatedMarginCOP float64                 `json:"margen_estimado"`
+	ActualKM           *float64                `json:"km_reales,omitempty"`
+	ActualCostCOP      *float64                `json:"costo_real,omitempty"`
+	CostDeviationCOP   *float64                `json:"desviacion_costos,omitempty"`
+	ActualMarginCOP    *float64                `json:"margen_real,omitempty"`
+	Expenses           *EnterpriseTripExpenses `json:"gastos,omitempty"`
+}
+
 type EnterpriseProfitabilityFilter struct {
 	From      time.Time
 	To        time.Time

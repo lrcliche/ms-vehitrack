@@ -119,6 +119,14 @@ func (s *PostgresEnterpriseStore) CloseTripExpenses(ctx context.Context, tenantI
 	}
 	return decodeEnterprise[entities.EnterpriseTripCloseResult](raw, "enterprise trip close")
 }
+func (s *PostgresEnterpriseStore) ListTrips(ctx context.Context, tenantID, actorID, tenantUserID string, filter entities.EnterpriseTripFilter) (*entities.EnterprisePage[entities.EnterpriseTrip], error) {
+	raw, err := s.function(ctx, tenantID, `SELECT business.fnc_list_enterprise_trips($1::uuid,$2::uuid,$3::uuid,$4::date,$5::date,$6,$7::integer,$8::integer)`,
+		tenantID, actorID, tenantUserID, filter.From, filter.To, nullableText(filter.Status), filter.Page, filter.Limit)
+	if err != nil {
+		return nil, err
+	}
+	return decodeEnterprise[entities.EnterprisePage[entities.EnterpriseTrip]](raw, "enterprise trips")
+}
 func (s *PostgresEnterpriseStore) ProfitabilityReport(ctx context.Context, tenantID, actorID, tenantUserID string, filter entities.EnterpriseProfitabilityFilter) (*entities.EnterpriseProfitabilityReport, error) {
 	raw, err := s.function(ctx, tenantID, `SELECT business.fnc_enterprise_profitability_report($1::uuid,$2::uuid,$3::uuid,$4::date,$5::date,$6::uuid,$7::uuid,$8::integer,$9::integer)`,
 		tenantID, actorID, tenantUserID, filter.From, filter.To, nullableText(filter.VehicleID), nullableText(filter.DriverID), filter.Page, filter.Limit)

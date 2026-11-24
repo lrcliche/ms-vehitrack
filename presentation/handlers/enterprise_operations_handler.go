@@ -308,6 +308,41 @@ func (h *EnterpriseOperationsHandler) CloseTripExpenses(c *gin.Context) {
 	}
 	responses.Success(c, http.StatusOK, result)
 }
+
+func (h *EnterpriseOperationsHandler) ListTrips(c *gin.Context) {
+	claims, svc, ok := h.context(c)
+	if !ok {
+		return
+	}
+	from, err := parseOptionalDate(c.Query("desde"))
+	if err != nil {
+		responses.ErrorFromApp(c, presentationerrors.BadRequest("desde debe usar YYYY-MM-DD"))
+		return
+	}
+	to, err := parseOptionalDate(c.Query("hasta"))
+	if err != nil {
+		responses.ErrorFromApp(c, presentationerrors.BadRequest("hasta debe usar YYYY-MM-DD"))
+		return
+	}
+	page, err := queryInt(c, "pagina", 1)
+	if err != nil {
+		responses.ErrorFromApp(c, presentationerrors.BadRequest("pagina debe ser un entero positivo"))
+		return
+	}
+	limit, err := queryInt(c, "limite", 25)
+	if err != nil {
+		responses.ErrorFromApp(c, presentationerrors.BadRequest("limite debe ser un entero positivo"))
+		return
+	}
+	result, err := svc.ListTrips(c.Request.Context(), claims.TenantID, claims.Subject, claims.TenantUserID,
+		entities.EnterpriseTripFilter{From: from, To: to, Status: c.Query("estado"), Page: page, Limit: limit})
+	if err != nil {
+		responses.ErrorFromApp(c, presentationerrors.Map(err))
+		return
+	}
+	responses.Success(c, http.StatusOK, result)
+}
+
 func (h *EnterpriseOperationsHandler) ProfitabilityReport(c *gin.Context) {
 	claims, svc, ok := h.context(c)
 	if !ok {
