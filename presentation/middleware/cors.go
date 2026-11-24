@@ -8,8 +8,8 @@ import (
 )
 
 var allowedOrigins = map[string]struct{}{
-	"https://acalderon474.github.io/vehitrack-empresarial": {},
-	"http://localhost:4200":                                {},
+	"https://acalderon474.github.io": {},
+	"http://localhost:4200":          {},
 }
 
 var allowedMethods = map[string]struct{}{
