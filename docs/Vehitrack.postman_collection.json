@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "0d6b8fa6-83e0-4fe0-b218-303fb07b701a",
     "name": "VehiTrack API v2",
-    "description": "Colección para los endpoints v2 implementados de autenticación, rutas, operaciones empresariales y App Driver. Importa uno de los entornos incluidos y configura email, password y tenantId antes de iniciar sesión. El login guarda automáticamente data.access_token en token.",
+    "description": "Colección para endpoints v2 implementados de autenticación, rutas, operaciones empresariales, recorridos, CORS y App Driver. Importa un entorno y configura credenciales empresariales antes de iniciar sesión. El login guarda automáticamente data.access_token en token.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -788,6 +788,45 @@
       "name": "Asignaciones y recorridos",
       "item": [
         {
+          "name": "Listar recorridos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/enterprise/trips?desde={{desde}}&hasta={{hasta}}&pagina=1&limite=25",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "enterprise",
+                "trips"
+              ],
+              "query": [
+                {
+                  "key": "desde",
+                  "value": "{{desde}}"
+                },
+                {
+                  "key": "hasta",
+                  "value": "{{hasta}}"
+                },
+                {
+                  "key": "pagina",
+                  "value": "1"
+                },
+                {
+                  "key": "limite",
+                  "value": "25"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "description": "Requiere token empresarial con permiso services.read. desde y hasta son opcionales pero deben enviarse juntos; estado opcional: en_curso o finalizado. Los códigos comerciales son referencias estables derivadas de UUID."
+        },
+        {
           "name": "Confirmar asignación",
           "request": {
             "method": "POST",
@@ -1133,6 +1172,48 @@
             }
           },
           "response": []
+        }
+      ]
+    },
+    {
+      "name": "CORS",
+      "item": [
+        {
+          "name": "Preflight CORS para GET",
+          "request": {
+            "method": "OPTIONS",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "https://acalderon474.github.io"
+              },
+              {
+                "key": "Access-Control-Request-Method",
+                "value": "GET"
+              },
+              {
+                "key": "Access-Control-Request-Headers",
+                "value": "Authorization, Content-Type"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/enterprise/trips",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "enterprise",
+                "trips"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "description": "Preflight de navegador. Para desarrollo local, cambia Origin a http://localhost:4200. Respuesta esperada: 204 con Access-Control-Allow-Origin, Access-Control-Allow-Methods y Access-Control-Allow-Headers."
         }
       ]
     }
