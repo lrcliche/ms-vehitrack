@@ -134,6 +134,7 @@ func (h *BusinessAuthHandler) Login(c *gin.Context) {
 		case errors.Is(err, businessauth.ErrTokenServiceUnavailable):
 			responses.Error(c, http.StatusServiceUnavailable, "auth-unavailable", "v2 token signing is not configured")
 		default:
+			log.Printf("[AUTH] operation=login status=failed error=%v", err)
 			responses.Error(c, http.StatusInternalServerError, "internal-server-error", "Login failed")
 		}
 		return
